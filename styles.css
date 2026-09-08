@@ -21,7 +21,7 @@ body {
   min-height: 100vh;
   min-height: 100svh;
   margin: 0;
-  background: linear-gradient(to right, var(--purple) 50%, var(--black) 50%);
+  background: linear-gradient(to right, var(--purple) 35%, var(--black) 65%);
   color: var(--text);
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -231,7 +231,7 @@ h1 {
 
   .home-section {
     padding-block: 3rem 3.5rem;
-    background: var(--purple);
+    background: linear-gradient(to bottom, var(--purple) 55%, var(--black) 100%);
   }
 
   h1 {

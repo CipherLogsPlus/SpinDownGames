@@ -1,6 +1,6 @@
 # SpinDownGames
 
-The first temporary SpinDownGames website: a single static page with a 50/50 purple and black desktop layout that stacks on mobile.
+The first temporary SpinDownGames website: a single static page with purple and black sides that blend through the center. On mobile, the layout stacks and purple fades into black vertically.
 
 ## Files
 
