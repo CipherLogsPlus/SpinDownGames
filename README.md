@@ -8,7 +8,7 @@ The first temporary SpinDownGames website: a single static page with purple and 
 - `styles.css` — branding, layout, and responsive styles.
 - `.nojekyll` — lets GitHub Pages serve the static files directly.
 
-No JavaScript, dependencies, build step, or backend is required. All links point to sections on the same page. Unavailable business details are marked as coming soon.
+No JavaScript, dependencies, build step, or backend is required. Navigation links point to sections on the same page. The Contact section links to the official [Instagram profile](https://www.instagram.com/spindowngamingco/) in a new tab. Unavailable business details are marked as coming soon.
 
 ## Preview locally
 
