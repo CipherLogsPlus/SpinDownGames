@@ -26,6 +26,20 @@
     <main class="split-layout">
       <section class="home-section" id="home" aria-labelledby="home-title" tabindex="-1">
         <div class="home-content">
+          <figure class="coin-figure" aria-label="SpinDownGames 3D coin">
+            <div class="coin-stage" id="coin-stage" data-model="assets/coin.glb">
+              <img class="coin-poster" src="assets/coin-poster.webp" width="640" height="640"
+                alt="Silver preview of the SpinDownGames coin, with its raised lettering and rim."
+                fetchpriority="high" decoding="async">
+              <canvas class="coin-canvas" id="coin-canvas" tabindex="0"
+                aria-label="Interactive 3D SpinDownGames coin" aria-describedby="coin-instructions" hidden></canvas>
+            </div>
+            <figcaption class="coin-caption">
+              <span id="coin-instructions">SpinDownGames coin</span>
+              <button class="coin-toggle" id="coin-toggle" type="button" hidden>Pause rotation</button>
+            </figcaption>
+            <noscript><p class="coin-fallback-note">Enable JavaScript to rotate the 3D coin.</p></noscript>
+          </figure>
           <p class="eyebrow">Cards. Events. Competition.</p>
           <h1 id="home-title">SpinDownGames</h1>
           <p class="introduction">Trading cards, events, and competitive TCG gaming.</p>
@@ -61,5 +75,6 @@
       <small>SpinDownGames</small>
       <a href="#home">Back to top <span aria-hidden="true">&uarr;</span></a>
     </footer>
+    <script src="coin-viewer.js?v=sideways-1" defer></script>
   </body>
 </html>
