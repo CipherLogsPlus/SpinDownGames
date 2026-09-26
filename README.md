@@ -1,64 +1,58 @@
-# SpinDownGames — sideways-spinning 3D coin
+# SpinDownGames
 
-This is the public, static SpinDownGames website from the supplied ZIP, with the supplied coin added above the homepage heading. The existing purple/black layout, Home/Cards/Events/Teams/Contact sections, and Instagram link are retained. This has no connection to InvoHub, Supabase, authentication, or any inventory database.
+The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A purple, black, and blue design with original fantasy card artwork, clear Instagram calls to action, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
 
-## Replacing the earlier coin version
+Live site: <https://cipherlogsplus.github.io/SpinDownGames/>
 
-The rotation fix is in `coin-viewer.js`. Replace the earlier file of that name in the repository root, beside `index.html`. The updated `index.html` also adds a cache-busting version to the script URL so visitors get the corrected rotation. The `styles.css`, GLB, and poster are unchanged; upload the complete package only when installing the coin for the first time.
-
-## What is included
-
-- `index.html` — existing page plus coin viewer markup.
-- `styles.css` — existing styles plus responsive coin styles.
-- `coin-viewer.js` — dependency-free WebGL rendering, rotation, mouse/touch/keyboard controls, and loading/failure handling.
-- `assets/coin.glb` — optimized derivative of the supplied `coin 6.stl`.
-- `assets/coin-poster.webp` — still image of the same model for loading, unavailable WebGL, or disabled JavaScript.
-- `.nojekyll` — retained for GitHub Pages.
-- `.gitignore` — prevents accidental commits of the large print master.
-- `VERIFICATION.md` — implementation and local test notes.
-
-There is no npm install, build command, external CDN, third-party tracking, or paid 3D service. All code, geometry, and the poster are served by the website itself.
-
-## Review before publishing
-
-The separately supplied `SpinDownGames-Sideways-Preview.html` is a self-contained interactive preview. Download it and open it in a browser with JavaScript/WebGL enabled; it does not require a local server. It is not a live hosted URL and does not publish anything. Do not use the preview file instead of the normal website files.
-
-For this normal multi-file website, use a local server rather than double-clicking `index.html`:
+## Run locally
 
 ```sh
 python3 -m http.server 8000 --bind 127.0.0.1
 ```
 
-Visit `http://localhost:8000`. Opening the normal `index.html` directly as a file may show only the still image because browsers restrict file-to-file model fetches.
+Open <http://localhost:8000>. No install, build, account, database, third-party CDN, or runtime dependency is needed. Use an HTTP server so the coin model can load. All assets and fonts are self-hosted. The site remains navigable without JavaScript; the coin has a still-image fallback, and the dice roller explains that JavaScript is required.
 
-## Publish to the existing public site
+## Files
 
-Back up the current public repo first. Extract the supplied ZIP. Upload the **extracted files and the assets folder** into the root of the public `SpinDownGames` repository, preserving `assets/` as a folder. The files are directly at the ZIP root. Do not upload the ZIP itself or nest an extra wrapper folder inside the repo.
+- `index.html`: page content, social metadata, and semantic Cards, Events, Play, Teams, and Contact sections.
+- `styles.css`: design, responsive layouts, keyboard focus, and reduced-motion rules.
+- `script.js`: mobile navigation and D6/D20 rolls with the last five results, held only in page memory.
+- `coin-viewer.js`: the supplied WebGL coin viewer, now loaded as visitors approach its section.
+- `assets/hero-cards-*.webp`: responsive original promotional artwork. These are illustrations, not inventory or products for sale.
+- `assets/brand.webp`: optimized copy of the existing logo. `brand-original.jpg` preserves the upload extracted from the old page.
+- `assets/coin.glb` and `assets/coin-poster.webp`: existing coin geometry and still preview.
+- `assets/fonts/`: Anton and DM Sans, distributed with their SIL Open Font Licenses.
+- `scripts/verify.cjs`: browser checks for interactions, responsive layout, accessibility, and fallbacks.
+- `ARTWORK.md`: asset provenance, generation method, and exact artwork prompt.
 
-At minimum, replace `index.html` and `styles.css`; add `coin-viewer.js`, `assets/coin.glb`, and `assets/coin-poster.webp`. Retain the existing `.nojekyll`. The README, verification notes, and `.gitignore` may also be included.
+## Content and publishing
 
-Use the site's existing GitHub Pages publishing branch/configuration. No hosting settings need to be changed for this addition. After its deployment completes, refresh the public site and verify the coin, navigation, and Instagram link. Do not upload these files to InvoHub.
+Only the existing confirmed Instagram address is used: <https://www.instagram.com/spindowngamingco/>. Inventory and team details are still coming soon. Do not add unconfirmed prices, products, dates, locations, affiliations, or contact details.
 
-Do not upload the original 126 MB STL. Keep it privately as the print/edit master. This package contains only the simplified display derivative.
+The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. The next appearance is explicitly unannounced. When adding future events, use an exact date and review/archive them afterward rather than using an evergreen “this Saturday” label.
 
-## Display behavior
+GitHub Pages publishes `main` from the repository root. Pushing to that branch deploys the site; verify the matching Pages build and public assets before calling a release live. This repository is separate from InvoHub and has no connection to private inventory or authentication.
 
-The coin automatically rotates once every 20 seconds unless the visitor requests reduced motion. It turns sideways around the vertical Y axis, showing the front, edge, then back, rather than flipping end over end; the source design itself is not redrawn. Drag horizontally to turn it; a mouse can also tilt it vertically. Vertical touch gestures remain available to scroll the page.
+## Coin interaction
 
-The visible button pauses or starts rotation. With the canvas focused, arrow keys turn it, Home resets the view, and Space toggles rotation. Changing tabs or scrolling the coin out of view pauses automatic rendering. Device-pixel ratio is capped at 1.5 and animation targets at most 30 frames per second to limit the rendering workload. Actual performance depends on the device.
+The optimized 3.69 MB GLB is fetched only when the visitor comes within 300 pixels of the coin. Autoplay turns around the vertical axis once every 20 seconds. Drag horizontally to turn; a mouse can tilt vertically. On the focused canvas, arrows rotate, Home resets, and Space toggles autoplay. The visible button also starts/stops rotation. Reduced-motion visitors begin paused; scrolling out of view or hiding the tab pauses rendering.
 
-The supplied STL has geometry but no color attributes. **Silver is a presentation choice**, not a color specified by the source file. Finish/lighting are defined in the fragment shader in `coin-viewer.js`. Adjust `FULL_TURN_SECONDS` to change rotation speed. The original geometry is preserved separately; this simplified GLB is intended for website viewing, not manufacturing.
+The supplied STL geometry and silver presentation are retained. The custom GLB reader supports the existing single, uncompressed indexed mesh, not arbitrary glTF scenes. Keep the original print STL private and out of this repository. The website GLB is publicly downloadable.
 
-## Model size
+## Browser verification
 
-| | Original STL | Website GLB |
-|---|---:|---:|
-| Bytes | 126,196,134 | 3,688,160 |
-| Approximate decimal MB | 126.20 | 3.69 |
-| Triangles | 2,523,921 | 119,999 |
+Use Node 20+ with Playwright and axe-core available. For an isolated test setup that leaves the public site dependency-free:
 
-The geometry was reduced using VTK quadric decimation, then centered, oriented, and exported with weighted surface normals. The GLB is approximately 97.1% smaller. Small surface details can differ from the high-resolution print master after simplification.
+```sh
+npm install --prefix /tmp/spindown-qa --no-audit --no-fund playwright axe-core
+node /tmp/spindown-qa/node_modules/playwright/cli.js install chromium
+NODE_PATH=/tmp/spindown-qa/node_modules node scripts/verify.cjs
+```
 
-The custom loader intentionally supports the one uncompressed indexed mesh in this GLB. It is not a general-purpose glTF scene/animation/texture loader. For more elaborate future models, replace the viewer with a general glTF renderer instead of assuming every GLB will load here.
+Optional environment variables:
 
-Because this is a public 3D display, the website's optimized GLB is publicly downloadable by visitors. The source STL is not included or exposed.
+- `BASE_URL`: local or deployed website URL (default `http://127.0.0.1:8000`).
+- `BROWSER_PATH`: an existing Chrome/Chromium executable; otherwise Playwright uses its installed browser.
+- `SCREENSHOT_DIR`: save desktop/mobile full-page and hero screenshots to this directory.
+
+Checks cover widths 320–1920px at normal and 200% text, mobile keyboard navigation, event archive, deterministic dice endpoints, roll history, repeated-click protection, coin controls, deferred model loading, missing WebGL/model, JavaScript-disabled fallbacks, broken assets, external link safety, and automated WCAG 2.1 AA rules. Automated checks complement manual visual review; they do not establish complete accessibility conformance.

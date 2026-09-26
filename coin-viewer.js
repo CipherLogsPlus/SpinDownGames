@@ -287,5 +287,16 @@
   canvas.addEventListener('pointercancel', finishDrag);
   canvas.addEventListener('lostpointercapture', () => { drag = null; });
 
-  start().catch(error => { console.warn('Showing still coin preview:', error.message); fail(); });
+  // Keep the model off the initial page load. Fetch it as the visitor approaches.
+  function loadCoin() {
+    start().catch(error => { console.warn('Showing still coin preview:', error.message); fail(); });
+  }
+  if ('IntersectionObserver' in window) {
+    const loader = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      loader.disconnect();
+      loadCoin();
+    }, { rootMargin: '300px' });
+    loader.observe(stage);
+  } else loadCoin();
 })();
