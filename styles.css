@@ -710,16 +710,19 @@ h1 > span {
   color: var(--accent);
   margin-right: 0.5rem;
 }
-/* The dated event is retained as an archive, with no stale upcoming claim. */
+/* Upcoming show details, with previous events kept in an expandable archive. */
 .events-section {
   background: #0e1116;
   border-block: 1px solid var(--line);
 }
 .events-layout {
   display: grid;
-  grid-template-columns: 1fr 1.15fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   gap: 5rem;
-  align-items: center;
+  align-items: start;
+}
+.events-list {
+  min-width: 0;
 }
 .events-copy .eyebrow {
   margin-bottom: 1.4rem;
@@ -773,6 +776,7 @@ h1 > span {
 }
 .event-card-top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.8rem;
   align-items: center;
@@ -793,6 +797,7 @@ h1 > span {
 }
 .event-main {
   display: flex;
+  flex-wrap: wrap;
   gap: 1.4rem;
   align-items: center;
 }
@@ -817,6 +822,62 @@ h1 > span {
   font-weight: 400;
   font-size: 3.1rem;
   line-height: 1.25;
+}
+.date-block .date-range {
+  font-size: 2.1rem;
+}
+.event-main > div:last-child {
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+.event-description {
+  margin-top: 1.3rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.event-presenters {
+  font-size: 0.67rem;
+  color: var(--muted);
+  margin-bottom: 1.2rem;
+}
+.event-flyer {
+  border-top: 1px solid var(--line);
+}
+.event-flyer img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+.past-events {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.event-flyer > summary,
+.past-events > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  min-height: 48px;
+  padding: 0.85rem 0.15rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.74rem;
+}
+.event-flyer > summary::-webkit-details-marker,
+.past-events > summary::-webkit-details-marker {
+  display: none;
+}
+.event-flyer > summary > span,
+.past-events > summary > span {
+  color: var(--accent);
+  font-size: 1.1rem;
+  flex: none;
+}
+.event-flyer[open] > summary > span,
+.past-events[open] > summary > span {
+  transform: rotate(45deg);
 }
 .event-main h3 {
   font-size: clamp(1.4rem, 2vw, 2rem);

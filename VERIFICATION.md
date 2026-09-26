@@ -1,5 +1,15 @@
 # Website verification — September 26, 2026
 
+## Trainer’s Bazaar next event
+
+Added the owner-supplied October 17–18, 2026 show at Scene75 in Brunswick as the next event. The event card includes separate Saturday/Sunday hours, the address, free admission, and the flyer’s main attractions and presenters. The unchanged flyer opens in a native disclosure. The September 19 event remains intact inside a separate past-event disclosure.
+
+- The dates and hours match the supplied flyer and the [2026 event listing](https://www.tcdb.com/CardShows.cfm?ID=32373&MODE=VIEW&VIEW=Calendar).
+- Reviewed desktop and mobile event screenshots; verified that the flyer loads at its original dimensions.
+- All checks in `scripts/verify.cjs` passed, including layouts from 320–1920px at 100%/200% text, keyboard navigation, archive expansion, both accessibility scans, dice/coin interactions, and no-JavaScript/rendering fallbacks.
+- Additional checks confirmed the old event’s text is preserved and the expanded flyer plus archive fit at 200% text on 320, 390, 768, and 1440px viewports.
+- Existing social destinations are unchanged. No event registration, table booking, organizer contact, or invented booth details were added.
+
 ## Collector card Discord link
 
 Changed the "One more for the binder / Talk cards with us" card to the same owner-supplied Discord invite as the bottom Contact button. Its screen-reader destination now says Discord; the visible card content and appearance are unchanged.

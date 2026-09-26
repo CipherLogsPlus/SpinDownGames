@@ -29,7 +29,9 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 
 The "Talk cards with us" collector card, "Be part of the conversation" team link, and bottom Contact button use the owner-supplied Discord invite: <https://discord.gg/CK7rKFJVPX>. All other social calls to action retain the confirmed Instagram address: <https://www.instagram.com/spindowngamingco/>. Inventory and team details are still coming soon. Do not add unconfirmed prices, products, dates, locations, affiliations, or contact details.
 
-The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. The next appearance is explicitly unannounced. When adding future events, use an exact date and review/archive them afterward rather than using an evergreen “this Saturday” label.
+The next event is **Trainer’s Bazaar Pokémon & TCG Trade Show**, October 17–18, 2026 at Scene75, 3688 Center Road, Brunswick, OH 44212. Saturday hours are 10 AM–6 PM; Sunday hours are 10 AM–4 PM. Admission is free. Details come from the owner-supplied flyer; the year and schedule are corroborated by the [event listing](https://www.tcdb.com/CardShows.cfm?ID=32373&MODE=VIEW&VIEW=Calendar). The unchanged flyer is available in an expandable panel and is served locally from `assets/events/trainers-bazaar-october-2026.jpg`.
+
+The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. Review and archive events after their exact dates rather than using an evergreen “this Saturday” label.
 
 GitHub Pages publishes `main` from the repository root. Pushing to that branch deploys the site; verify the matching Pages build and public assets before calling a release live. This repository is separate from InvoHub and has no connection to private inventory or authentication.
 

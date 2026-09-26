@@ -22,6 +22,10 @@ All three files are served locally by the website. There are no runtime card API
 
 The generated fantasy hero was removed from the current site and social preview. Its prior assets and prompt remain recoverable in Git history.
 
+## Event flyer
+
+`assets/events/trainers-bazaar-october-2026.jpg` is the owner's supplied Trainer’s Bazaar flyer, copied without alteration (1023 × 1280 pixels). The page transcribes its visible event details; cropped-off organizer contact information is not reconstructed. Artwork and logos in the flyer remain with their respective owners.
+
 ## Existing brand and coin
 
 `assets/brand-original.jpg` was extracted unchanged from the embedded logo in GitHub revision `876c5ba`. `assets/brand.webp` is a resized 320px WebP copy. The original logo is also the social-sharing preview.

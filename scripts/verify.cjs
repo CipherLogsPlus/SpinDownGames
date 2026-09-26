@@ -121,6 +121,7 @@ const test = async (name, fn) => {
       );
     });
     await test("past event archive expands and closes", async () => {
+      await page.locator(".past-events > summary").click();
       const details = page.locator(".event-archive");
       await details.locator("summary").click();
       assert(await details.evaluate((el) => el.open));
@@ -130,6 +131,7 @@ const test = async (name, fn) => {
       assert.match((await details.innerText()).replace(/\s+/g, " "), /not current offers or a report/);
       await details.locator("summary").click();
       assert(!(await details.evaluate((el) => el.open)));
+      await page.locator(".past-events > summary").click();
     });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await test("D20 and D6 roll endpoints, history cap, and accessible result", async () => {
@@ -272,6 +274,7 @@ const test = async (name, fn) => {
         .getByRole("link", { name: "The meetups" })
         .click();
       assert.equal(new URL(fallback.url()).hash, "#events");
+      await fallback.locator(".past-events > summary").click();
       await fallback.locator(".event-archive summary").click();
       assert(
         await fallback.locator(".event-archive > div > p").first().isVisible(),
