@@ -59,7 +59,7 @@ const test = async (name, fn) => {
             if (a.getAttribute("href").startsWith("#"))
               return !document.getElementById(a.hash.slice(1));
             const expected = a.matches(
-              "#contact .contact-copy a, .path-card.collector",
+              "#contact .contact-copy a, .path-card.collector, .team-copy > a",
             )
               ? "https://discord.gg/CK7rKFJVPX"
               : "https://www.instagram.com/spindowngamingco/";
