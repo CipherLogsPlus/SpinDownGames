@@ -1,5 +1,13 @@
 # Website verification — September 26, 2026
 
+## Collector card Discord link
+
+Changed the "One more for the binder / Talk cards with us" card to the same owner-supplied Discord invite as the bottom Contact button. Its screen-reader destination now says Discord; the visible card content and appearance are unchanged.
+
+- Compared all 19 anchors against the preceding release: only the collector card changed. The bottom Discord link and all four remaining Instagram links are retained.
+- Tapped the visible "Talk cards with us" text in a mobile browser check and confirmed the new tab requested <https://discord.gg/CK7rKFJVPX>.
+- Retained safe new-tab attributes and updated the existing external-link assertion to include the collector card. JavaScript syntax and diff checks passed.
+
 ## Discord contact update
 
 The bottom "Want to talk TCGs?" section now links to the owner-supplied invite, <https://discord.gg/CK7rKFJVPX>, with a "Join us on Discord" button and community label. Discord's public invite endpoint returned HTTP 200 for the SpinDown Games server, with no expiration listed, at verification time.

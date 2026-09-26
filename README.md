@@ -27,7 +27,7 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 
 ## Content and publishing
 
-The bottom Contact button uses the owner-supplied Discord invite: <https://discord.gg/CK7rKFJVPX>. All other social calls to action retain the confirmed Instagram address: <https://www.instagram.com/spindowngamingco/>. Inventory and team details are still coming soon. Do not add unconfirmed prices, products, dates, locations, affiliations, or contact details.
+The "One more for the binder / Talk cards with us" collector card and bottom Contact button use the owner-supplied Discord invite: <https://discord.gg/CK7rKFJVPX>. All other social calls to action retain the confirmed Instagram address: <https://www.instagram.com/spindowngamingco/>. Inventory and team details are still coming soon. Do not add unconfirmed prices, products, dates, locations, affiliations, or contact details.
 
 The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. The next appearance is explicitly unannounced. When adding future events, use an exact date and review/archive them afterward rather than using an evergreen “this Saturday” label.
 
