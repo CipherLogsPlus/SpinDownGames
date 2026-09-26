@@ -1,6 +1,6 @@
 # SpinDownGames
 
-The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A blue-and-black design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, clear Instagram calls to action, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
+The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A blue-and-black design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, Instagram calls to action, a Discord community link, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
 
 Live site: <https://cipherlogsplus.github.io/SpinDownGames/>
 
@@ -27,7 +27,7 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 
 ## Content and publishing
 
-Only the existing confirmed Instagram address is used: <https://www.instagram.com/spindowngamingco/>. Inventory and team details are still coming soon. Do not add unconfirmed prices, products, dates, locations, affiliations, or contact details.
+The bottom Contact button uses the owner-supplied Discord invite: <https://discord.gg/CK7rKFJVPX>. All other social calls to action retain the confirmed Instagram address: <https://www.instagram.com/spindowngamingco/>. Inventory and team details are still coming soon. Do not add unconfirmed prices, products, dates, locations, affiliations, or contact details.
 
 The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. The next appearance is explicitly unannounced. When adding future events, use an exact date and review/archive them afterward rather than using an evergreen “this Saturday” label.
 

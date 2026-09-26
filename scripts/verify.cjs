@@ -58,8 +58,11 @@ const test = async (name, fn) => {
           .filter((a) => {
             if (a.getAttribute("href").startsWith("#"))
               return !document.getElementById(a.hash.slice(1));
+            const expected = a.matches("#contact .contact-copy a")
+              ? "https://discord.gg/CK7rKFJVPX"
+              : "https://www.instagram.com/spindowngamingco/";
             return (
-              a.href !== "https://www.instagram.com/spindowngamingco/" ||
+              a.href !== expected ||
               a.target !== "_blank" ||
               !a.rel.includes("noopener") ||
               !a.rel.includes("noreferrer")
@@ -68,6 +71,10 @@ const test = async (name, fn) => {
           .map((a) => a.outerHTML),
       );
       assert.deepEqual(bad, []);
+      assert.equal(
+        await page.getByRole("link", { name: /Join us on Discord/ }).count(),
+        1,
+      );
       assert.equal(
         await page.getByText("This Saturday", { exact: true }).count(),
         0,

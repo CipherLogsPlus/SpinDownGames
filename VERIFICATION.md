@@ -1,5 +1,13 @@
 # Website verification — September 26, 2026
 
+## Discord contact update
+
+The bottom "Want to talk TCGs?" section now links to the owner-supplied invite, <https://discord.gg/CK7rKFJVPX>, with a "Join us on Discord" button and community label. Discord's public invite endpoint returned HTTP 200 for the SpinDown Games server, with no expiration listed, at verification time.
+
+- Compared all 19 anchors against the preceding release: only the bottom contact destination changed; all five other Instagram links and every anchor's new-tab attributes are retained.
+- Visually reviewed the mobile contact section and verified keyboard focus, the exact invite URL, and a touch target exceeding 44 by 44 pixels.
+- Updated the existing external-link check for the specific Discord destination. All checks in `scripts/verify.cjs` passed, including responsive layouts, accessibility, interactions, and fallbacks.
+
 ## Blue theme update
 
 Changed the purple and lavender interface accents to blue, including panels, focus states, the favicon, and the coin's accent lighting. The real card images, supplied logo, page layout, and interactions are retained. Versioned stylesheet, favicon, and coin-script URLs refresh the changed assets for returning visitors.
@@ -7,7 +15,7 @@ Changed the purple and lavender interface accents to blue, including panels, foc
 - Visually reviewed desktop and mobile screenshots.
 - Re-ran `scripts/verify.cjs`: all checks passed, including responsive layouts at normal and 200% text, navigation, dice, coin, no-JavaScript and rendering fallbacks, and both automated accessibility scans.
 - Compared all 19 anchors against the prior version: every destination and attribute is unchanged, including all six Instagram links.
-- The requested bottom contact button's Discord destination is pending the owner's invite URL; no invite was guessed or substituted.
+- At this release, the bottom contact button's Discord destination was pending the owner's invite URL; it is supplied in the subsequent update above.
 
 ## Real-card hero update
 
