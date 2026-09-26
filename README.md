@@ -1,6 +1,6 @@
 # SpinDownGames
 
-The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A purple, black, and blue design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, clear Instagram calls to action, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
+The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A blue-and-black design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, clear Instagram calls to action, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
 
 Live site: <https://cipherlogsplus.github.io/SpinDownGames/>
 

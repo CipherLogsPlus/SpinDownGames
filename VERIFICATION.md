@@ -1,5 +1,14 @@
 # Website verification — September 26, 2026
 
+## Blue theme update
+
+Changed the purple and lavender interface accents to blue, including panels, focus states, the favicon, and the coin's accent lighting. The real card images, supplied logo, page layout, and interactions are retained. Versioned stylesheet, favicon, and coin-script URLs refresh the changed assets for returning visitors.
+
+- Visually reviewed desktop and mobile screenshots.
+- Re-ran `scripts/verify.cjs`: all checks passed, including responsive layouts at normal and 200% text, navigation, dice, coin, no-JavaScript and rendering fallbacks, and both automated accessibility scans.
+- Compared all 19 anchors against the prior version: every destination and attribute is unchanged, including all six Instagram links.
+- The requested bottom contact button's Discord destination is pending the owner's invite URL; no invite was guessed or substituted.
+
 ## Real-card hero update
 
 Replaced the generated fantasy hero with actual Goldspan Dragon, Pikachu, and Blue-Eyes Alternative White Dragon images. Pikachu is centered, with Magic on the left and Yu-Gi-Oh! on the right. Source details and printing references are in `ARTWORK.md`. The previous generated files were removed from the current tree, and the social preview uses the existing logo.

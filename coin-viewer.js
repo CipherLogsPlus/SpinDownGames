@@ -136,8 +136,8 @@
       float diffuse = 0.06 + 0.65 * max(dot(n, key), 0.0) + 0.12 * max(dot(n, fill), 0.0);
       vec3 color = vec3(0.42, 0.44, 0.49) * diffuse;
       color += vec3(0.94, 0.94, 1.0) * pow(max(dot(n, normalize(key + v)), 0.0), 65.0) * 0.85;
-      color += vec3(0.85, 0.80, 1.0) * pow(max(dot(n, normalize(fill + v)), 0.0), 42.0) * 0.40;
-      color += vec3(0.16, 0.09, 0.27) * max(dot(n, edge), 0.0);
+      color += vec3(0.80, 0.89, 1.0) * pow(max(dot(n, normalize(fill + v)), 0.0), 42.0) * 0.40;
+      color += vec3(0.09, 0.16, 0.27) * max(dot(n, edge), 0.0);
       vec3 reflected = reflect(-v, n);
       float studio = pow(max(dot(reflected, normalize(vec3(-0.8, 0.7, 1.0))), 0.0), 14.0);
       color += vec3(0.40, 0.42, 0.47) * studio;
