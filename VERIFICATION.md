@@ -1,4 +1,15 @@
-# Redesign verification — September 26, 2026
+# Website verification — September 26, 2026
+
+## Real-card hero update
+
+Replaced the generated fantasy hero with actual Goldspan Dragon, Pikachu, and Blue-Eyes Alternative White Dragon images. Pikachu is centered, with Magic on the left and Yu-Gi-Oh! on the right. Source details and printing references are in `ARTWORK.md`. The previous generated files were removed from the current tree, and the social preview uses the existing logo.
+
+- Visually reviewed desktop and mobile card layouts and verified all three card files load.
+- Re-ran `scripts/verify.cjs`: all checks passed, including 320–1920px layouts at normal and 200% text, both accessibility scans, navigation, dice, coin, and fallback behavior.
+- Verified the versioned stylesheet URL returns HTTP 200, so returning visitors can load the updated card layout.
+- No JavaScript behavior, private inventory, or hosting configuration changed.
+
+## Initial redesign verification
 
 Validated the final public-site redesign locally using Chromium 148, Playwright, and axe-core. `scripts/verify.cjs` completed with all checks passing.
 

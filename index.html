@@ -23,12 +23,9 @@
     />
     <meta
       property="og:image"
-      content="https://cipherlogsplus.github.io/SpinDownGames/assets/hero-cards-1536.webp"
+      content="https://cipherlogsplus.github.io/SpinDownGames/assets/brand-original.jpg"
     />
-    <meta
-      property="og:image:alt"
-      content="Original fantasy artwork of holographic trading cards and a crystal dragon."
-    />
+    <meta property="og:image:alt" content="SpinDownGames logo." />
     <meta name="twitter:card" content="summary_large_image" />
     <link
       rel="canonical"
@@ -42,7 +39,7 @@
       type="font/ttf"
       crossorigin
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=real-cards-1" />
     <script src="script.js" defer></script>
     <script src="coin-viewer.js" defer></script>
     <title>SpinDownGames — Big plays. Better company.</title>
@@ -136,26 +133,43 @@
         </div>
         <figure class="hero-art">
           <div class="art-topline" aria-hidden="true">
-            <span>SDG / THE NEXT CHAPTER</span><span>✦</span>
+            <span>REAL CARDS. SHARED OBSESSION.</span><span>✦</span>
           </div>
-          <img
-            src="assets/hero-cards-1536.webp"
-            srcset="
-              assets/hero-cards-800.webp   800w,
-              assets/hero-cards-1536.webp 1536w
-            "
-            sizes="(max-width: 760px) 100vw, 60vw"
-            width="1536"
-            height="1024"
-            alt="Three holographic fantasy cards with a silver crystal dragon, an astral sword, and a moonlit castle."
-            fetchpriority="high"
-          />
+          <div class="card-fan">
+            <img
+              class="showcase-card card-magic"
+              src="assets/cards/magic-goldspan-dragon.webp"
+              width="600"
+              height="838"
+              alt="Magic: The Gathering — Goldspan Dragon, Kaldheim 139."
+              decoding="async"
+            />
+            <img
+              class="showcase-card card-yugioh"
+              src="assets/cards/yugioh-blue-eyes-alternative.webp"
+              width="343"
+              height="509"
+              alt="Yu-Gi-Oh! — Blue-Eyes Alternative White Dragon, Movie Pack Ultra Rare."
+              decoding="async"
+            />
+            <img
+              class="showcase-card card-pokemon"
+              src="assets/cards/pokemon-pikachu.webp"
+              width="245"
+              height="342"
+              alt="Pokémon — Pikachu, Scarlet &amp; Violet—151 illustration rare 173/165, displayed in the center."
+              fetchpriority="high"
+            />
+          </div>
           <div class="art-sticker" aria-hidden="true">
             SHUFFLE UP.<br /><span>SHOW UP.</span
             ><span class="sticker-star">✳</span>
           </div>
           <figcaption>
-            Original SpinDownGames artwork <span>SDG / 01</span>
+            <span class="featured-games"
+              >Magic: The Gathering · Pokémon · Yu-Gi-Oh!</span
+            >
+            <span class="display-note">Collector picks · display only</span>
           </figcaption>
         </figure>
       </section>

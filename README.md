@@ -1,6 +1,6 @@
 # SpinDownGames
 
-The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A purple, black, and blue design with original fantasy card artwork, clear Instagram calls to action, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
+The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A purple, black, and blue design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, clear Instagram calls to action, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
 
 Live site: <https://cipherlogsplus.github.io/SpinDownGames/>
 
@@ -18,12 +18,12 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 - `styles.css`: design, responsive layouts, keyboard focus, and reduced-motion rules.
 - `script.js`: mobile navigation and D6/D20 rolls with the last five results, held only in page memory.
 - `coin-viewer.js`: the supplied WebGL coin viewer, now loaded as visitors approach its section.
-- `assets/hero-cards-*.webp`: responsive original promotional artwork. These are illustrations, not inventory or products for sale.
+- `assets/cards/*.webp`: actual Goldspan Dragon, Pikachu, and Blue-Eyes Alternative White Dragon card images, arranged in CSS. The selections are for display, not inventory listings.
 - `assets/brand.webp`: optimized copy of the existing logo. `brand-original.jpg` preserves the upload extracted from the old page.
 - `assets/coin.glb` and `assets/coin-poster.webp`: existing coin geometry and still preview.
 - `assets/fonts/`: Anton and DM Sans, distributed with their SIL Open Font Licenses.
 - `scripts/verify.cjs`: browser checks for interactions, responsive layout, accessibility, and fallbacks.
-- `ARTWORK.md`: asset provenance, generation method, and exact artwork prompt.
+- `ARTWORK.md`: card selections, source links, printed credits, and asset provenance.
 
 ## Content and publishing
 
