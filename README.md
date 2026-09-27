@@ -2,7 +2,7 @@
 
 The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A blue-and-black design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, Instagram calls to action, a Discord community link, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
 
-Live site: <https://cipherlogsplus.github.io/SpinDownGames/>
+Live site: <https://spindowngames.com/>
 
 ## Run locally
 
@@ -47,6 +47,22 @@ When adding or updating an event, use this location markup inside its `.event-ca
 The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. Review and archive events after their exact dates rather than using an evergreen “this Saturday” label.
 
 GitHub Pages publishes `main` from the repository root. Pushing to that branch deploys the site; verify the matching Pages build and public assets before calling a release live. This repository is separate from InvoHub and has no connection to private inventory or authentication.
+
+### Custom domain
+
+`CNAME` sets the GitHub Pages domain to `spindowngames.com`. Keep this file in future deployments. Canonical URLs and share metadata use `https://spindowngames.com/`; page, stylesheet, script, and asset links remain relative so they work at the domain root.
+
+Cloudflare manages DNS. Configure these records with **DNS only** (gray cloud) and TTL **Auto**:
+
+| Type | Name | Content |
+| --- | --- | --- |
+| A | @ | 185.199.108.153 |
+| A | @ | 185.199.109.153 |
+| A | @ | 185.199.110.153 |
+| A | @ | 185.199.111.153 |
+| CNAME | www | cipherlogsplus.github.io |
+
+For the initial switch, add the domain to GitHub Pages before pointing these DNS records at GitHub. Verify domain ownership through the GitHub account's Pages settings and keep its verification TXT record in Cloudflare. Once DNS is correct and GitHub has issued the certificate, enable Enforce HTTPS and check the apex, `www` redirect, old GitHub Pages URL, and all three site pages. Do not call the domain live until those checks pass. See [GitHub's custom-domain instructions](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site).
 
 ## Website policies
 
