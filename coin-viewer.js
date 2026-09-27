@@ -29,7 +29,7 @@
     stage.dataset.state = 'fallback';
     canvas.hidden = true;
     toggle.hidden = true;
-    instructions.textContent = 'SpinDownGames coin · still preview';
+    instructions.textContent = 'SpinDownGames™ coin · still preview';
     observer?.disconnect();
   }
   function stop() {

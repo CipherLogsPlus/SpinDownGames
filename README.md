@@ -1,8 +1,12 @@
-# SpinDownGames
+# SpinDownGames™
 
-The public SpinDownGames website: trading cards, events, and competitive TCG gaming. A blue-and-black design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, Instagram calls to action, a Discord community link, an interactive D6/D20 roller, and the existing SpinDownGames 3D coin.
+The public SpinDownGames™ website: trading cards, events, and competitive TCG gaming. A blue-and-black design with real Pokémon, Magic: The Gathering, and Yu-Gi-Oh! card images, Instagram calls to action, a Discord community link, an interactive D6/D20 roller, and the existing SpinDownGames™ 3D coin.
 
 Live site: <https://spindowngames.com/>
+
+## Brand name
+
+Use **SpinDownGames™** in website copy, page titles, sharing metadata, and public labels. The header and footer wordmarks place a small superscript **™** after GAMES. Keep this convention when adding new pages or branded text. Domain names, URLs, social handles, repository names, and file paths keep their existing spelling.
 
 ## Run locally
 

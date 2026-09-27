@@ -49,7 +49,7 @@ const test = async (name, fn) => {
       assert.equal(await page.locator("h1").count(), 1);
       assert.equal(
         await page.title(),
-        "SpinDownGames — Big plays. Better company.",
+        "SpinDownGames™ — Big plays. Better company.",
       );
     });
     await test("navigation destinations and external link safety", async () => {
