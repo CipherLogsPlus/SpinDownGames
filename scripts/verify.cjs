@@ -60,6 +60,18 @@ const test = async (name, fn) => {
               return !document.getElementById(a.hash.slice(1));
             if (["privacy.html", "terms.html"].includes(a.getAttribute("href")))
               return a.origin !== location.origin || a.target !== "";
+            if (a.matches(".event-directions")) {
+              const url = new URL(a.href);
+              return (
+                url.origin !== "https://www.google.com" ||
+                url.pathname !== "/maps/dir/" ||
+                url.searchParams.get("api") !== "1" ||
+                !url.searchParams.get("destination") ||
+                a.target !== "_blank" ||
+                !a.rel.includes("noopener") ||
+                !a.rel.includes("noreferrer")
+              );
+            }
             const expected = a.matches(
               "#contact .contact-copy a, .path-card.collector, .team-copy > a",
             )
@@ -83,6 +95,70 @@ const test = async (name, fn) => {
         await page.getByText("This Saturday", { exact: true }).count(),
         0,
       );
+    });
+    await test("each current and archived event has its own directions", async () => {
+      const destinations = await page
+        .locator(".event-directions")
+        .evaluateAll((links) =>
+          links.map((link) =>
+            new URL(link.href).searchParams.get("destination"),
+          ),
+        );
+      assert.deepEqual(destinations, [
+        "3688 Center Road, Brunswick, OH 44212",
+        "10190 State Route 21, Beach City, OH 44608",
+      ]);
+    });
+    await test("new events use their displayed address without a custom Maps link", async () => {
+      const fixture = await browser.newPage();
+      try {
+        await fixture.route("**/*", async (route) => {
+          if (
+            !route.request().isNavigationRequest() ||
+            route.request().frame() !== fixture.mainFrame()
+          )
+            return route.continue();
+          const response = await route.fetch();
+          const html = await response.text();
+          await route.fulfill({
+            response,
+            body: html.replace(
+              "</main>",
+              `
+              <article class="event-card" id="new-event-fixture">
+                <span class="event-location">
+                  <strong>Future venue</strong><br />
+                  <span class="event-address">42 Collector’s Lane, Suite #2
+                    · New City, OH 43000</span>
+                </span>
+              </article>
+              <article class="event-card" id="pending-event-fixture">
+                <span class="event-location">
+                  <strong>Venue to be announced</strong>
+                  <span class="event-address"> </span>
+                </span>
+              </article>
+            </main>`,
+            ),
+          });
+        });
+        await fixture.goto(base);
+        const links = fixture.locator("#new-event-fixture .event-directions");
+        assert.equal(await links.count(), 1);
+        const url = new URL(await links.getAttribute("href"));
+        assert.equal(
+          url.searchParams.get("destination"),
+          "42 Collector’s Lane, Suite #2, New City, OH 43000",
+        );
+        assert.deepEqual([...url.searchParams.keys()], ["api", "destination"]);
+        assert.equal(url.hash, "");
+        assert.equal(
+          await fixture.locator("#pending-event-fixture a").count(),
+          0,
+        );
+      } finally {
+        await fixture.close();
+      }
     });
     for (const width of [320, 360, 390, 768, 1024, 1440, 1920]) {
       for (const textScale of [100, 200]) {
@@ -130,7 +206,10 @@ const test = async (name, fn) => {
       assert(
         await page.locator(".event-archive > div > p").first().isVisible(),
       );
-      assert.match((await details.innerText()).replace(/\s+/g, " "), /not current offers or a report/);
+      assert.match(
+        (await details.innerText()).replace(/\s+/g, " "),
+        /not current offers or a report/,
+      );
       await details.locator("summary").click();
       assert(!(await details.evaluate((el) => el.open)));
       await page.locator(".past-events > summary").click();

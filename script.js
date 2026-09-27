@@ -30,6 +30,38 @@
   });
   mobile.addEventListener("change", () => closeMenu());
 
+  // The displayed address is the single source for every event's directions.
+  document
+    .querySelectorAll(".event-card .event-location")
+    .forEach((location) => {
+      const address = location
+        .querySelector(".event-address")
+        ?.textContent.replace(/\s+/g, " ")
+        .replace(/\s*·\s*/g, ", ")
+        .trim();
+      if (!address || location.querySelector(".event-directions")) return;
+
+      const url = new URL("https://www.google.com/maps/dir/");
+      url.searchParams.set("api", "1");
+      url.searchParams.set("destination", address);
+      const link = document.createElement("a");
+      link.className = "button button-primary event-directions";
+      link.href = url.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Get directions ";
+      const arrow = document.createElement("span");
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = "↗";
+      const label = document.createElement("span");
+      label.className = "sr-only";
+      const venue =
+        location.querySelector("strong")?.textContent.trim() || address;
+      label.textContent = ` to ${venue} in Google Maps (opens in a new tab)`;
+      link.append(arrow, label);
+      location.append(document.createElement("br"), link);
+    });
+
   const button = document.querySelector("#roll-button");
   const options = document.querySelector(".dice-options");
   const panel = document.querySelector("#dice-panel");

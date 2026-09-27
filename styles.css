@@ -909,6 +909,13 @@ h1 > span {
   color: #dce0e7;
   font-weight: 500;
 }
+.event-location {
+  min-width: 0;
+}
+.event-directions {
+  margin-top: 0.9rem;
+  gap: 1rem;
+}
 .event-tags {
   display: flex;
   gap: 0.45rem;

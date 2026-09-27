@@ -18,7 +18,7 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 - `styles.css`: design, responsive layouts, keyboard focus, and reduced-motion rules.
 - `privacy.html` and `terms.html`: public Privacy Policy and Website Terms, linked from every page’s footer.
 - `legal.css`: readable policy-page typography and layout; policy pages require no JavaScript.
-- `script.js`: mobile navigation and D6/D20 rolls with the last five results, held only in page memory.
+- `script.js`: mobile navigation, automatic event directions links, and D6/D20 rolls with the last five results, held only in page memory.
 - `coin-viewer.js`: the supplied WebGL coin viewer, now loaded as visitors approach its section.
 - `assets/cards/*.webp`: actual Goldspan Dragon, Pikachu, and Blue-Eyes Alternative White Dragon card images, arranged in CSS. The selections are for display, not inventory listings.
 - `assets/brand.webp`: optimized copy of the existing logo. `brand-original.jpg` preserves the upload extracted from the old page.
@@ -32,6 +32,17 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 The "Talk cards with us" collector card, "Be part of the conversation" team link, and bottom Contact button use the owner-supplied Discord invite: <https://discord.gg/CK7rKFJVPX>. All other social calls to action retain the confirmed Instagram address: <https://www.instagram.com/spindowngamingco/>. Inventory and team details are still coming soon. Do not add unconfirmed prices, products, dates, locations, affiliations, or contact details.
 
 The next event is **Trainer’s Bazaar Pokémon & TCG Trade Show**, October 17–18, 2026 at Scene75, 3688 Center Road, Brunswick, OH 44212. Saturday hours are 10 AM–6 PM; Sunday hours are 10 AM–4 PM. Admission is free. Details come from the owner-supplied flyer; the year and schedule are corroborated by the [event listing](https://www.tcdb.com/CardShows.cfm?ID=32373&MODE=VIEW&VIEW=Calendar). The unchanged flyer is available in an expandable panel and is served locally from `assets/events/trainers-bazaar-october-2026.jpg`.
+
+Every event’s **Get directions** button is generated from its displayed street address when the page loads. It opens Google Maps; the origin and travel mode are left to the visitor. The website has no embedded map, Maps API key, or location permission request.
+
+When adding or updating an event, use this location markup inside its `.event-card` and fill in the confirmed venue and full postal address. No separate Maps URL needs updating. The same behavior applies to upcoming and archived events. Missing or empty addresses get no directions button; without JavaScript, the address remains readable.
+
+```html
+<span class="event-location">
+  <strong>Venue name</strong><br />
+  <span class="event-address">Street address · City, State ZIP</span>
+</span>
+```
 
 The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. Review and archive events after their exact dates rather than using an evergreen “this Saturday” label.
 
@@ -65,4 +76,4 @@ Optional environment variables:
 - `BROWSER_PATH`: an existing Chrome/Chromium executable; otherwise Playwright uses its installed browser.
 - `SCREENSHOT_DIR`: save desktop/mobile full-page and hero screenshots to this directory.
 
-Checks cover widths 320–1920px at normal and 200% text, mobile keyboard navigation, event archive, deterministic dice endpoints, roll history, repeated-click protection, coin controls, deferred model loading, missing WebGL/model, JavaScript-disabled fallbacks, broken assets, external link safety, and automated WCAG 2.1 AA rules. Automated checks complement manual visual review; they do not establish complete accessibility conformance.
+Checks cover widths 320–1920px at normal and 200% text, mobile keyboard navigation, event archive, directions for existing and newly added event addresses, deterministic dice endpoints, roll history, repeated-click protection, coin controls, deferred model loading, missing WebGL/model, JavaScript-disabled fallbacks, broken assets, external link safety, and automated WCAG 2.1 AA rules. Automated checks complement manual visual review; they do not establish complete accessibility conformance.
