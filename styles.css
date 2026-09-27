@@ -1334,6 +1334,7 @@ h1 > span {
 }
 .site-footer nav {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 1.8rem;
 }

@@ -16,6 +16,8 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 
 - `index.html`: page content, social metadata, and semantic Cards, Events, Play, Teams, and Contact sections.
 - `styles.css`: design, responsive layouts, keyboard focus, and reduced-motion rules.
+- `privacy.html` and `terms.html`: public Privacy Policy and Website Terms, linked from every page’s footer.
+- `legal.css`: readable policy-page typography and layout; policy pages require no JavaScript.
 - `script.js`: mobile navigation and D6/D20 rolls with the last five results, held only in page memory.
 - `coin-viewer.js`: the supplied WebGL coin viewer, now loaded as visitors approach its section.
 - `assets/cards/*.webp`: actual Goldspan Dragon, Pikachu, and Blue-Eyes Alternative White Dragon card images, arranged in CSS. The selections are for display, not inventory listings.
@@ -34,6 +36,12 @@ The next event is **Trainer’s Bazaar Pokémon & TCG Trade Show**, October 17�
 The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. Review and archive events after their exact dates rather than using an evergreen “this Saturday” label.
 
 GitHub Pages publishes `main` from the repository root. Pushing to that branch deploys the site; verify the matching Pages build and public assets before calling a release live. This repository is separate from InvoHub and has no connection to private inventory or authentication.
+
+## Website policies
+
+The policies describe the current informational site, GitHub Pages security logging, browser-only dice history, and links to external platforms. Contact uses the existing Instagram and Discord channels because no business email has been supplied. No registered entity name, postal address, retention deadline, governing jurisdiction, arbitration clause, or checkout/refund policy has been invented.
+
+Keep these pages aligned with actual practices. Revisit them before adding accounts, analytics, contact forms, newsletters, a shop, different hosting, or new data-sharing practices. Business-wide privacy duties and any future sales terms need a separate review of the relevant business details; publishing these pages is not a legal-compliance certification.
 
 ## Coin interaction
 

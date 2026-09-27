@@ -58,6 +58,8 @@ const test = async (name, fn) => {
           .filter((a) => {
             if (a.getAttribute("href").startsWith("#"))
               return !document.getElementById(a.hash.slice(1));
+            if (["privacy.html", "terms.html"].includes(a.getAttribute("href")))
+              return a.origin !== location.origin || a.target !== "";
             const expected = a.matches(
               "#contact .contact-copy a, .path-card.collector, .team-copy > a",
             )

@@ -1,5 +1,15 @@
 # Website verification — September 26, 2026
 
+## Privacy Policy and Website Terms
+
+Added `privacy.html` and `terms.html` with shared branding, a dedicated reading stylesheet, homepage footer links, cross-links, and a return-home link. The policies describe the current informational website and use the supplied Discord/Instagram contact channels; the owner confirmed there is no business email yet.
+
+- Reviewed both page texts against the existing code and GitHub’s published Pages logging disclosure. No registered entity, address, email, guaranteed retention period, sales conditions, or mandatory dispute forum was assumed.
+- Both pages passed automated accessibility checks at 390px and 1440px and fit at 320, 390, 768, and 1440px with 100% and 200% text.
+- All local links returned HTTP 200. Navigation from the homepage footer to each policy, between policies, and back home worked with JavaScript disabled.
+- The policy pages load no JavaScript, set no cookies or browser-storage entries in the local browser check, and make no third-party runtime requests. No page errors occurred.
+- The full existing `scripts/verify.cjs` suite passed after updating its navigation check for the two internal policy links. Desktop and mobile policy screenshots were reviewed.
+
 ## Trainer’s Bazaar next event
 
 Added the owner-supplied October 17–18, 2026 show at Scene75 in Brunswick as the next event. The event card includes separate Saturday/Sunday hours, the address, free admission, and the flyer’s main attractions and presenters. The unchanged flyer opens in a native disclosure. The September 19 event remains intact inside a separate past-event disclosure.
