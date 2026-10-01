@@ -8,7 +8,8 @@ export function el(tag, className = "", text = null) {
   if (text !== null) node.textContent = String(text);
   return node;
 }
-const number = (value) => String(value).padStart(3, "0");
+const number = (value) =>
+  value === null || value === undefined ? "—" : String(value).padStart(3, "0");
 const date = (value) =>
   value
     ? new Intl.DateTimeFormat("en-US", {
@@ -91,25 +92,24 @@ export function renderStats(snapshot) {
   return fragment;
 }
 
-function silhouette() {
-  const art = el("div", "card-art");
-  art.setAttribute("aria-hidden", "true");
-  art.append(el("span", "mystery-silhouette"), el("span", "mystery-grain"));
-  return art;
+function blankCard() {
+  const card = el("div", "blank-card");
+  card.setAttribute("aria-hidden", "true");
+  return card;
 }
 
 export function renderCollection(entries, selectedId) {
   const fragment = document.createDocumentFragment();
   if (!entries.length) {
-    const empty = el("div", "empty-state");
-    empty.append(
-      el("h3", "", "No Veilings found"),
-      el("p", "", "Try another name, number, or collection filter."),
-    );
-    fragment.append(empty);
+    // Decorative empty slots are not catalog records, character counts or grants.
+    for (let i = 0; i < 10; i++) fragment.append(blankCard());
     return fragment;
   }
   for (const entry of entries) {
+    if (entry.status !== "owned") {
+      fragment.append(blankCard());
+      continue;
+    }
     const card = el("button", `veiling-card is-${entry.status}`);
     card.type = "button";
     card.dataset.cardId = entry.id;
@@ -123,8 +123,7 @@ export function renderCollection(entries, selectedId) {
         "--card-accent",
         accents[entry.rarity.accent] || "#7da8b1",
       );
-    const art =
-      entry.status === "undiscovered" ? silhouette() : el("div", "card-art");
+    const art = el("div", "card-art");
     if (entry.status !== "undiscovered" && entry.thumbnail)
       art.append(image(entry.thumbnail, "", "", true));
     const caption = el("span", "card-caption");
@@ -197,25 +196,19 @@ export function renderDetail(detail) {
     fragment.append(empty);
     return fragment;
   }
-  if (detail.status === "undiscovered") {
-    const mystery = el("div", "mystery-detail");
-    const visual = el("div", "mystery-illustration");
-    visual.setAttribute("aria-hidden", "true");
-    visual.append(el("span", "mystery-silhouette"));
-    const title = el("h2", "", "???");
+  if (detail.status !== "owned") {
+    const empty = el("div", "mystery-detail");
+    const title = el("h2", "", "Yet to be discovered");
     title.id = "selected-name";
-    mystery.append(
-      visual,
+    empty.append(
       title,
-      el("p", "eyebrow", `// ${number(detail.number)} · Not discovered`),
-      el("p", "", "A story still waiting to be found."),
       el(
         "p",
         "",
-        "Its identity and artwork remain hidden until a verified discovery.",
+        "Register a physical card to add its Veiling to your collection.",
       ),
     );
-    fragment.append(mystery);
+    fragment.append(empty);
     return fragment;
   }
   const main = el("div", "detail-main");
@@ -224,7 +217,7 @@ export function renderDetail(detail) {
     portrait.append(
       image(
         detail.colorArt,
-        `Full-color concept artwork for ${detail.displayName}`,
+        `Full-color artwork for ${detail.displayName}`,
         "",
         true,
       ),
@@ -265,7 +258,6 @@ export function renderDetail(detail) {
         : "This story has not been written yet.",
     ),
     action("Read more →", "details", ""),
-    el("span", "draft-label", "Concept lore · not final canon"),
   );
   fragment.append(main, actions, lore);
   return fragment;
@@ -275,12 +267,7 @@ export function renderFullDetail(detail) {
   const grid = el("div", "full-detail-grid");
   if (detail.colorArt)
     grid.append(
-      image(
-        detail.colorArt,
-        `Concept artwork for ${detail.displayName}`,
-        "",
-        true,
-      ),
+      image(detail.colorArt, `Artwork for ${detail.displayName}`, "", true),
     );
   const content = el("div");
   const title = el("h2", "", detail.displayName);
@@ -296,7 +283,6 @@ export function renderFullDetail(detail) {
     metadata(detail, true),
     el("h3", "", "Lore"),
     el("p", "", detail.lore?.text || "Awaiting discovery."),
-    el("p", "draft-label", "Preview data & concept artwork · not final canon"),
   );
   grid.append(content);
   return grid;
@@ -313,7 +299,9 @@ function newsPanel(snapshot) {
     row.append(el("span", "", item.title), time);
     list.append(row);
   }
-  panel.append(list, el("span", "draft-label", "Editorial previews"));
+  panel.append(list);
+  if (!snapshot.news.length)
+    panel.append(el("p", "", "Collection announcements will appear here."));
   return panel;
 }
 
@@ -345,6 +333,7 @@ function achievementPanel(snapshot) {
     list.append(row);
   }
   panel.append(list);
+  if (!earned.length) panel.append(el("p", "", "No achievements earned yet."));
   return panel;
 }
 
@@ -402,7 +391,7 @@ export function renderRoute(route, snapshot, capabilities) {
       el(
         "p",
         "route-intro",
-        "Milestones along the way. The awards and progress below belong to the sample collection.",
+        "Milestones along the way. Earned achievements will appear here as your collection grows.",
       ),
     );
     const grid = el("div", "route-grid");
@@ -422,9 +411,7 @@ export function renderRoute(route, snapshot, capabilities) {
         el("p", "", definition.description),
       );
       if (earned)
-        card.append(
-          el("small", "", `Earned ${date(earned.earnedAt)} · sample`),
-        );
+        card.append(el("small", "", `Earned ${date(earned.earnedAt)}`));
       else {
         const progress = el("progress");
         progress.max = definition.rule.minimum || 1;
@@ -446,7 +433,7 @@ export function renderRoute(route, snapshot, capabilities) {
       el(
         "p",
         "route-intro",
-        "Discovery belongs to the world; ownership belongs to the collector. This log shows the sample world’s revealed Veilings.",
+        "Discovery belongs to the world; ownership belongs to the collector. Verified discoveries will appear here.",
       ),
     );
     const list = el("ol", "discovery-list");
@@ -467,8 +454,8 @@ export function renderRoute(route, snapshot, capabilities) {
           "p",
           "",
           discovery.publicDiscovererName
-            ? `First discovered by ${discovery.publicDiscovererName} · sample`
-            : "Launch reveal · sample",
+            ? `First discovered by ${discovery.publicDiscovererName}`
+            : "Launch reveal",
         ),
       );
       row.append(icon("discovery"), content);
@@ -480,7 +467,7 @@ export function renderRoute(route, snapshot, capabilities) {
       el(
         "p",
         "route-intro",
-        "Gather stories that belong together. Collection progress comes from the sample ownership records.",
+        "Gather stories that belong together. Progress comes from your verified ownership records.",
       ),
     );
     const grid = el("div", "route-grid");
@@ -509,9 +496,7 @@ export function renderRoute(route, snapshot, capabilities) {
         el(
           "small",
           "",
-          owned === collection.veilingIds.length
-            ? "Complete · sample"
-            : "In progress · sample",
+          owned === collection.veilingIds.length ? "Complete" : "In progress",
         ),
       );
       grid.append(card);
@@ -557,7 +542,7 @@ export function renderRoute(route, snapshot, capabilities) {
       el(
         "p",
         "route-intro",
-        "Editorial previews for the collection platform. These are draft articles, not published product or release announcements.",
+        "Approved collection announcements and stories will appear here.",
       ),
     );
     const grid = el("div", "route-grid");
@@ -582,11 +567,7 @@ export function renderRoute(route, snapshot, capabilities) {
     const note = el("div", "availability-note");
     note.append(
       el("strong", "", "Transfers are not available yet."),
-      el(
-        "p",
-        "",
-        "Secure accounts and an ownership service must be available before a transfer can start. There are no pending transfers in this preview.",
-      ),
+      el("p", "", "Secure ownership transfers are not available yet."),
     );
     fragment.append(
       note,
@@ -597,7 +578,7 @@ export function renderRoute(route, snapshot, capabilities) {
       el(
         "p",
         "route-intro",
-        "This is a read-only preview. No account has been created, and no profile or ownership changes are saved.",
+        "Your account is managed by the secure sign-in service. Profile editing is not available yet.",
       ),
     );
     const grid = el("div", "route-grid");
@@ -610,7 +591,7 @@ export function renderRoute(route, snapshot, capabilities) {
       ],
       [
         "Privacy",
-        "Ownership visibility controls will be available with real accounts. This preview contains sample records only.",
+        "Your collection is private. Public ownership visibility controls are not available yet.",
       ],
       ["Motion", "Spinarium follows your device’s reduced-motion preference."],
     ]) {

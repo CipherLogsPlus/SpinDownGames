@@ -1,4 +1,4 @@
-// Test tools stay outside the public site; see spinarium/README.md for setup.
+// Browser verification uses test-only provider interception, never live credentials.
 // NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify-spinarium.cjs
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -13,8 +13,9 @@ const base = (process.env.BASE_URL || "http://127.0.0.1:8000").replace(
 const root = path.resolve(__dirname, "..");
 const preservationRef =
   process.env.PRESERVATION_REF || "89f701e7d1f999d1283cdae1944a69accfd5acda";
+const git = (...args) =>
+  execFileSync("git", args, { cwd: root, maxBuffer: 32 * 1024 * 1024 });
 const issues = [];
-let pageForCleanup = null;
 const test = async (name, fn) => {
   try {
     await fn();
@@ -22,72 +23,46 @@ const test = async (name, fn) => {
   } catch (error) {
     issues.push(`${name}: ${error.message}`);
     console.error(`FAIL ${name}: ${error.message}`);
-  } finally {
-    // Keep a failing dialog assertion from blocking unrelated later checks.
-    if (pageForCleanup && !pageForCleanup.isClosed()) {
-      await pageForCleanup
-        .evaluate(() =>
-          document
-            .querySelectorAll("dialog[open]")
-            .forEach((dialog) => dialog.close()),
-        )
-        .catch(() => {});
-    }
   }
 };
-const git = (...args) =>
-  execFileSync("git", args, { cwd: root, maxBuffer: 32 * 1024 * 1024 });
-const cards = (page) => page.locator("#collection-grid button[data-card-id]");
-const cardIDs = (page) =>
-  cards(page).evaluateAll((nodes) => nodes.map((node) => node.dataset.cardId));
-const selectSort = async (page, pattern) => {
-  const option = await page
-    .locator("#collection-sort option")
-    .evaluateAll((nodes, source) => {
-      const match = nodes.find((node) =>
-        new RegExp(source, "i").test(node.textContent),
-      );
-      return match?.value;
-    }, pattern.source);
-  assert(option, `Missing sort option ${pattern}`);
-  await page.locator("#collection-sort").selectOption(option);
+const fixtureOrigin = "https://spinarium-browser-fixture.supabase.co";
+const fixtureKey = "sb_publishable_test_only_browser_fixture_1234567890";
+const fixtureToken = "test-only-browser-access-token";
+const fixturePassword = "test-only-password-12345";
+const fixtureUser = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  email: "collector@example.test",
+  created_at: "2026-10-01T12:00:00Z",
+  email_confirmed_at: "2026-10-01T12:01:00Z",
+  // Provider verification strips editable privilege claims. The admin RPC alone
+  // determines the separate backend permission in these tests.
+  user_metadata: { role: "superadmin", is_admin: true },
+  app_metadata: { role: "superadmin" },
 };
-const filter = async (page, value) => {
-  const control = page.locator(`#collection-filter [data-filter="${value}"]`);
-  await control.click();
-  assert.equal(await control.getAttribute("aria-pressed"), "true");
-};
-const overflow = (page) =>
-  page.evaluate(() => ({
-    viewport: innerWidth,
-    document: document.documentElement.scrollWidth,
-    overflowing: [...document.querySelectorAll("body *")]
-      .filter((node) => {
-        const rect = node.getBoundingClientRect();
-        return (
-          getComputedStyle(node).position !== "fixed" &&
-          rect.width > 0 &&
-          rect.right > innerWidth + 1
-        );
-      })
-      .slice(0, 8)
-      .map(
-        (node) =>
-          `${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ""}.${node.className}`,
-      ),
-  }));
-(async () => {
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: process.env.BROWSER_PATH || undefined,
-    args: ["--no-sandbox", "--enable-unsafe-swiftshader"],
-  });
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 853 },
-    reducedMotion: "reduce",
-  });
-  const page = await context.newPage();
-  pageForCleanup = page;
+const emptySnapshot = () => ({
+  schemaVersion: "1",
+  mode: "live",
+  profile: {
+    id: fixtureUser.id,
+    displayName: "QA Collector",
+    memberSince: fixtureUser.created_at,
+    avatarSrc: null,
+  },
+  veilings: [],
+  series: [],
+  editions: [],
+  variants: [],
+  rarities: [],
+  physicalCards: [],
+  ownerships: [],
+  discoveries: [],
+  achievements: [],
+  userAchievements: [],
+  collections: [],
+  news: [],
+  events: [],
+});
+function observe(page) {
   const errors = [],
     failedResponses = [],
     requests = [];
@@ -96,25 +71,232 @@ const overflow = (page) =>
     requests.push({
       url: request.url(),
       method: request.method(),
-      body: request.postData(),
+      hasBody: request.postData() !== null,
     }),
   );
   page.on("response", (response) => {
     if (response.status() >= 400)
-      failedResponses.push(`${response.status()} ${response.url()}`);
+      failedResponses.push(
+        `${response.status()} ${new URL(response.url()).pathname}`,
+      );
   });
+  return { errors, failedResponses, requests };
+}
+async function assertBlankCards(page, scope, expectedCount) {
+  const cards = page.locator(`${scope} .blank-card`);
+  assert.equal(await cards.count(), expectedCount);
+  const invalid = await cards.evaluateAll((nodes) =>
+    nodes
+      .map((node, index) => {
+        const style = getComputedStyle(node);
+        const before = getComputedStyle(node, "::before");
+        const after = getComputedStyle(node, "::after");
+        return {
+          index,
+          black: style.backgroundColor === "rgb(0, 0, 0)",
+          noImage:
+            style.backgroundImage === "none" && style.maskImage === "none",
+          noPseudo: [before.content, after.content].every(
+            (content) => content === "none" || content === "normal",
+          ),
+          noArtwork:
+            node.querySelectorAll("img, svg, picture, canvas, video").length ===
+            0,
+          noText: node.textContent.trim() === "",
+          noRecord:
+            !node.hasAttribute("data-card-id") &&
+            !node.hasAttribute("data-card-number"),
+        };
+      })
+      .filter(
+        (card) =>
+          !card.black ||
+          !card.noImage ||
+          !card.noPseudo ||
+          !card.noArtwork ||
+          !card.noText ||
+          !card.noRecord,
+      ),
+  );
+  assert.deepEqual(
+    invalid,
+    [],
+    "Generic placeholders must be plain black and contain no character data",
+  );
+}
+function assertNoDemoRequests(requests) {
+  const disallowed = requests.filter(({ url }) =>
+    /demo-service|\/assets\/spinarium\/(?:ashenling|duskspore|lumenkit|crysthale|embercoil|zephyryn|silhouette)\b/i.test(
+      new URL(url).pathname,
+    ),
+  );
+  assert.deepEqual(
+    disallowed,
+    [],
+    "The public application requested demo data or concept characters",
+  );
+}
+function assertNoSecretsInURLs(requests) {
+  const invalid = requests.filter(({ url }) => {
+    const parsed = new URL(url);
+    return (
+      [...parsed.searchParams.keys()].some((key) =>
+        /^(?:password|access_token|refresh_token|claim_code|claim_token)$/i.test(
+          key,
+        ),
+      ) ||
+      url.includes(fixtureToken) ||
+      url.includes(fixturePassword)
+    );
+  });
+  assert.deepEqual(
+    invalid,
+    [],
+    "A password or bearer token was placed in a request URL",
+  );
+}
+async function storage(page) {
+  return page.evaluate(() => ({
+    local: { ...localStorage },
+    session: { ...sessionStorage },
+    cookie: document.cookie,
+  }));
+}
+async function checkAxe(page) {
+  await page.addScriptTag({ path: axePath });
+  const result = await page.evaluate(() =>
+    axe.run(document, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
+    }),
+  );
+  assert.deepEqual(
+    result.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      nodes: violation.nodes.map((node) => ({
+        target: node.target,
+        summary: node.failureSummary,
+      })),
+    })),
+    [],
+  );
+}
+async function checkOverflow(page, width, scale) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.evaluate((value) => {
+    document.documentElement.style.fontSize = `${value}%`;
+  }, scale);
+  const size = await page.evaluate(() => ({
+    viewport: innerWidth,
+    document: document.documentElement.scrollWidth,
+  }));
+  assert(size.document <= size.viewport + 1, JSON.stringify(size));
+}
+async function createFixture(browser, scenario = "empty") {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    reducedMotion: "reduce",
+  });
+  const calls = [];
+  await context.route("**/spinarium/config.js*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/javascript",
+      body: `export const spinariumConfig = Object.freeze(${JSON.stringify({ supabaseUrl: fixtureOrigin, supabasePublishableKey: fixtureKey })});`,
+    }),
+  );
+  await context.route(`${fixtureOrigin}/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    const headers = {
+      "access-control-allow-origin": new URL(base).origin,
+      "access-control-allow-methods": "GET, POST, PATCH, PUT, OPTIONS",
+      "access-control-allow-headers":
+        "apikey, authorization, content-type, prefer",
+    };
+    const respond = (value, status = 200) =>
+      route.fulfill({
+        status,
+        headers,
+        contentType: "application/json",
+        body: status === 204 ? "" : JSON.stringify(value),
+      });
+    if (method === "OPTIONS") return respond(null, 204);
+    calls.push({
+      path: url.pathname,
+      method,
+      hasAuthorization:
+        request.headers().authorization === `Bearer ${fixtureToken}`,
+    });
+    if (url.pathname === "/auth/v1/token" && method === "POST") {
+      const body = request.postDataJSON();
+      assert.equal(body.email, fixtureUser.email);
+      assert.equal(body.password, fixturePassword);
+      if (scenario === "invalid-login")
+        return respond(
+          { msg: `Provider detail must not be displayed: ${fixturePassword}` },
+          400,
+        );
+      return respond({
+        access_token: fixtureToken,
+        refresh_token: "test-only-refresh-token",
+        token_type: "bearer",
+        expires_in: 3600,
+        user: { ...fixtureUser, id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+      });
+    }
+    if (url.pathname === "/auth/v1/user" && method === "GET") {
+      assert.equal(request.headers().authorization, `Bearer ${fixtureToken}`);
+      return scenario === "unverified-user"
+        ? respond({ error: "User not verified" }, 401)
+        : respond(fixtureUser);
+    }
+    if (url.pathname === "/auth/v1/signup" && method === "POST")
+      return respond({ ...fixtureUser, email_confirmed_at: null });
+    if (url.pathname === "/auth/v1/logout" && method === "POST")
+      return respond(null, 204);
+    if (
+      url.pathname === "/rest/v1/rpc/spinarium_dashboard" &&
+      method === "POST"
+    )
+      return respond(emptySnapshot());
+    if (url.pathname === "/rest/v1/rpc/is_spinarium_admin" && method === "POST")
+      return respond(false);
+    return respond({ error: "Unexpected test-only provider endpoint" }, 400);
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
+  const observed = observe(page);
+  await page.goto(`${base}/spinarium/#signin`, { waitUntil: "networkidle" });
+  await page.waitForFunction(
+    () => !document.querySelector("#auth-fields").disabled,
+  );
+  return { context, page, calls, observed };
+}
+async function signIn(page) {
+  await page.locator("#auth-email").fill(fixtureUser.email);
+  await page.locator("#auth-password").fill(fixturePassword);
+  await page.locator("#auth-password").press("Enter");
+}
+(async () => {
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.BROWSER_PATH || undefined,
+    args: ["--no-sandbox", "--enable-unsafe-swiftshader"],
+  });
+  const contexts = [];
   try {
-    await test("original runtime, legal pages, branding, assets, and hosting configuration are preserved", async () => {
+    await test("original website, branding, assets, legal pages, and hosting configuration are preserved", async () => {
       const exemptDocs = new Set([
         "README.md",
         "ARTWORK.md",
         "VERIFICATION.md",
       ]);
-      const originalFiles = git("ls-tree", "-r", "--name-only", preservationRef)
+      for (const file of git("ls-tree", "-r", "--name-only", preservationRef)
         .toString()
         .trim()
-        .split("\n");
-      for (const file of originalFiles) {
+        .split("\n")) {
         assert(
           fs.existsSync(path.join(root, file)),
           `Original file removed: ${file}`,
@@ -123,632 +305,463 @@ const overflow = (page) =>
         const original = git("show", `${preservationRef}:${file}`);
         const current = fs.readFileSync(path.join(root, file));
         if (file === "scripts/verify.cjs") {
-          // A narrow additive whitelist keeps the original suite runnable.
           const allowance =
             '            if (a.getAttribute("href") === "spinarium/")\n              return a.origin !== location.origin || a.target !== "";\n';
           assert.equal(
             current.toString().replace(allowance, ""),
             original.toString(),
-            "Original verification changed beyond the Spinarium link allowance",
           );
-        } else {
+        } else
           assert(current.equals(original), `Original file changed: ${file}`);
-        }
       }
     });
-    await page.goto(base, { waitUntil: "networkidle" });
-    await test("existing homepage content is intact and provides a Spinarium entry", async () => {
+    const guestContext = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      reducedMotion: "reduce",
+    });
+    contexts.push(guestContext);
+    const guest = await guestContext.newPage();
+    guest.setDefaultTimeout(10_000);
+    const observedGuest = observe(guest);
+    await guest.goto(base, { waitUntil: "networkidle" });
+    await test("existing homepage content and links are intact; View Spinarium opens account access", async () => {
       const original = git("show", `${preservationRef}:index.html`).toString();
       const current = fs.readFileSync(path.join(root, "index.html"), "utf8");
-      const result = await page.evaluate(
+      const result = await guest.evaluate(
         ({ original, current }) => {
-          const parser = new DOMParser();
-          const before = parser.parseFromString(original, "text/html");
-          const after = parser.parseFromString(current, "text/html");
+          const parse = (html) =>
+            new DOMParser().parseFromString(html, "text/html");
+          const before = parse(original),
+            after = parse(current);
           const additions = [...after.querySelectorAll('a[href*="spinarium"]')];
           additions.forEach((link) => link.remove());
-          const normalize = (document) =>
-            document.body.textContent.replace(/\s+/g, " ").trim();
-          const links = (document) =>
-            [...document.querySelectorAll("a")].map((link) => [
-              link.getAttribute("href"),
-              link.getAttribute("target"),
-              link.getAttribute("rel"),
-              link.textContent.trim(),
+          const text = (doc) =>
+            doc.body.textContent.replace(/\s+/g, " ").trim();
+          const links = (doc) =>
+            [...doc.querySelectorAll("a")].map((a) => [
+              a.getAttribute("href"),
+              a.getAttribute("target"),
+              a.getAttribute("rel"),
+              a.textContent.trim(),
             ]);
           return {
-            beforeText: normalize(before),
-            afterText: normalize(after),
+            before: text(before),
+            after: text(after),
             beforeLinks: links(before),
             afterLinks: links(after),
-            entryCount: additions.length,
+            entries: additions.length,
           };
         },
         { original, current },
       );
-      assert(result.entryCount > 0, "Missing Spinarium entry link");
-      assert.equal(
-        result.afterText,
-        result.beforeText,
-        "Original homepage text changed",
-      );
-      assert.deepEqual(
-        result.afterLinks,
-        result.beforeLinks,
-        "Original link destination or safety attributes changed",
-      );
-      const entry = page.locator('a[href*="spinarium"]').first();
-      await entry.click();
-      assert.match(
-        new URL(page.url()).pathname,
-        /\/spinarium\/(?:index\.html)?$/,
-      );
+      assert(result.entries > 0);
+      assert.equal(result.after, result.before);
+      assert.deepEqual(result.afterLinks, result.beforeLinks);
+      await guest.locator('a[href*="spinarium"]').first().click();
+      await guest.waitForSelector("#auth-view");
+      assert(await guest.locator("#auth-form").isVisible());
+      assert(await guest.locator("#dashboard-view").isHidden());
+      assert.match(await guest.title(), /Sign in.*Spinarium/i);
     });
-    await page.waitForSelector("#collection-grid button[data-card-id]");
-    await page.evaluate(() => document.fonts.ready);
-    let allIds;
-    await test("dashboard is a clearly disclosed collection preview with real selectable cards", async () => {
-      assert.match(
-        await page.title(),
-        /Spinarium.*SpinDownGames|SpinDownGames.*Spinarium/i,
-      );
-      assert.match(
-        await page.locator("body").innerText(),
-        /preview|sample|demonstration/i,
-      );
-      assert.equal(await page.locator("h1").count(), 1);
-      allIds = await cardIDs(page);
+    await test("signed-out entry contains no demo characters or collection and only plain black decorative cards", async () => {
+      assert(await guest.locator("#account-tools").isHidden());
+      assert(await guest.locator("#sidebar-nav").isHidden());
+      assert(await guest.locator("#claim-open").isHidden());
       assert.equal(
-        allIds.length,
-        10,
-        "Preview fixture must provide two full collection rows",
+        await guest.locator("#collection-grid [data-card-id]").count(),
+        0,
       );
-      assert.equal(new Set(allIds).size, allIds.length, "Duplicate card IDs");
-      assert.match(
-        await page.locator("#selected-name").textContent(),
-        /Ashenling/i,
+      await assertBlankCards(guest, "#auth-view", 3);
+      assert.doesNotMatch(
+        await guest.locator("body").innerText(),
+        /Ashenling|Duskspore|Lumenkit|Crysthale|Embercoil|Zephyryn|Demo collector|Sample ownership/i,
       );
+      assertNoDemoRequests(observedGuest.requests);
     });
-    await test("preview projection redacts undiscovered lore and artwork and isolates reader mutations", async () => {
-      const result = await page.evaluate(async () => {
-        const { demoSpinariumService } = await import("./data/demo-service.js");
-        const snapshot = await demoSpinariumService.getDashboard();
-        const hidden = snapshot.discoveries
-          .filter((entry) => entry.status === "undiscovered")
-          .map((entry) =>
-            snapshot.veilings.find((veiling) => veiling.id === entry.veilingId),
+    await test("unconfigured sign-in and signup remain disabled and cannot submit a password", async () => {
+      const before = await storage(guest);
+      const requestCount = observedGuest.requests.length;
+      assert(await guest.locator("#auth-email").isDisabled());
+      assert(await guest.locator("#auth-password").isDisabled());
+      assert(await guest.locator("#auth-submit").isDisabled());
+      assert(await guest.locator("#auth-availability").isVisible());
+      await guest.locator("#signup-tab").click();
+      await guest.waitForFunction(
+        () =>
+          location.hash === "#signup" &&
+          !document.querySelector("#auth-confirm-group").hidden,
+      );
+      assert(await guest.locator("#auth-confirm-password").isDisabled());
+      await guest.evaluate(() => {
+        document
+          .querySelector("#auth-form")
+          .dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
           );
-        const before = snapshot.ownerships.length;
-        snapshot.ownerships.length = 0;
-        return {
-          hidden,
-          before,
-          after: (await demoSpinariumService.getDashboard()).ownerships.length,
-          capabilities: demoSpinariumService.getCapabilities(),
-        };
       });
-      assert.equal(result.hidden.length, 4);
-      for (const veiling of result.hidden) {
-        assert.equal(veiling.name, null);
-        assert.equal(veiling.type, null);
-        assert.equal(veiling.origin, null);
-        assert.equal(veiling.releaseDate, null);
-        assert.deepEqual(veiling.artwork, []);
-        assert.deepEqual(veiling.lore, []);
-        assert.deepEqual(veiling.editionIds, []);
-      }
-      assert.equal(
-        result.after,
-        result.before,
-        "Reader mutations persisted demo ownership",
+      assert(
+        observedGuest.requests
+          .slice(requestCount)
+          .every((request) => request.method === "GET" && !request.hasBody),
       );
-      assert.equal(result.capabilities.claims, false);
-      assert.equal(result.capabilities.authentication, false);
-      assert.equal(result.capabilities.transfers, false);
+      assert.deepEqual(await storage(guest), before);
+      await guest.locator("#signin-tab").click();
     });
-    await test("collection search finds a known Veiling and reports an empty result", async () => {
-      await page.locator("#collection-search").fill("ashEnLiNg");
-      await page.waitForFunction(
-        () =>
-          document.querySelectorAll("#collection-grid button[data-card-id]")
-            .length === 1,
-      );
-      assert.match(await cards(page).first().innerText(), /Ashenling/i);
-      await page.locator("#collection-search").fill("no-such-veiling-918237");
-      await page.waitForFunction(
-        () =>
-          document.querySelectorAll("#collection-grid button[data-card-id]")
-            .length === 0,
-      );
-      assert.match(
-        await page
-          .locator("#collection-grid, #collection-status")
-          .allInnerTexts()
-          .then((texts) => texts.join(" ")),
-        /no|nothing|found/i,
-      );
-      await page.locator("#collection-search").fill("");
-      await page.waitForFunction(
-        (count) =>
-          document.querySelectorAll("#collection-grid button[data-card-id]")
-            .length === count,
-        allIds.length,
-      );
-    });
-    await test("top navigation search enters the collection with a real query", async () => {
-      await page.locator("#catalog-search").fill("Crysthale");
-      await page.locator("#catalog-search").press("Enter");
-      await page.waitForFunction(
-        () =>
-          location.hash === "#collection" &&
-          document.querySelectorAll("#collection-grid button[data-card-id]")
-            .length === 1,
-      );
-      assert.equal(
-        await cards(page).first().getAttribute("data-card-id"),
-        "crysthale",
-      );
-      assert.equal(
-        await page.locator("#collection-search").inputValue(),
-        "Crysthale",
-      );
-      await page.locator("#collection-search").fill("");
-      await page.locator("#catalog-search").fill("");
-      await page.goto(`${base}/spinarium/#dashboard`, {
-        waitUntil: "networkidle",
+    await test("protected collection and admin links plus fabricated browser flags do not bypass account access", async () => {
+      await guest.evaluate(() => {
+        localStorage.setItem("spinarium-authenticated", "true");
+        localStorage.setItem("spinarium-admin", "true");
+        localStorage.setItem(
+          "spinarium-owned",
+          JSON.stringify([{ name: "Fabricated ownership" }]),
+        );
       });
-    });
-    await test("owned, discovered, and undiscovered filters are independent of selection", async () => {
-      const values = await page
-        .locator("#collection-filter [data-filter]")
-        .evaluateAll((nodes) => nodes.map((node) => node.dataset.filter));
-      assert(
-        values.includes("all") &&
-          values.includes("owned") &&
-          values.includes("discovered"),
-      );
-      const unknownValue = values.find((value) =>
-        /unknown|undiscovered|unowned/.test(value),
-      );
-      assert(unknownValue, "Missing unowned/undiscovered filter");
-      const initialSelected = await page
-        .locator("#selected-name")
-        .textContent();
-      await filter(page, "owned");
-      const owned = await cardIDs(page);
-      assert.equal(
-        owned.length,
-        5,
-        "Preview should contain five owned Veilings",
-      );
-      assert.equal(
-        await page.locator("#selected-name").textContent(),
-        initialSelected,
-      );
-      await filter(page, "discovered");
-      const discovered = await cardIDs(page);
-      assert.equal(
-        discovered.length,
-        6,
-        "Discovered must include globally revealed owned and unowned Veilings",
-      );
-      await filter(page, unknownValue);
-      assert(
-        (await cardIDs(page)).length > 0,
-        "Missing unknown collection state",
-      );
-      assert.match(
-        await page.locator("#collection-grid").innerText(),
-        /\?\?\?|unowned|not discovered|undiscovered/i,
-      );
-      await filter(page, "all");
-      assert.deepEqual((await cardIDs(page)).sort(), [...allIds].sort());
-    });
-    await test("number and name sorting reorder the collection without losing records", async () => {
-      await selectSort(page, /name/);
-      const byName = await cardIDs(page);
-      assert.deepEqual([...byName].sort(), [...allIds].sort());
-      assert.deepEqual(
-        byName.filter((id) => !id.startsWith("unknown-")),
-        [
-          "ashenling",
-          "crysthale",
-          "duskspore",
-          "embercoil",
-          "lumenkit",
-          "zephyryn",
-        ],
-        "Revealed names should sort alphabetically",
-      );
-      await selectSort(page, /number/);
-      const byNumber = await cardIDs(page);
-      assert.deepEqual([...byNumber].sort(), [...allIds].sort());
-      assert.notDeepEqual(
-        byName,
-        byNumber,
-        "Name sort did not change the order",
-      );
-      assert.deepEqual(byNumber, [
-        "ashenling",
-        "unknown-2",
-        "duskspore",
-        "lumenkit",
-        "crysthale",
-        "unknown-6",
-        "embercoil",
-        "unknown-8",
-        "zephyryn",
-        "unknown-10",
-      ]);
-      for (const pattern of [/rarity/, /release/]) {
-        await selectSort(page, pattern);
-        const sorted = await cardIDs(page);
-        assert.equal(
-          sorted[0],
-          pattern.source === "rarity" ? "embercoil" : "zephyryn",
-          "Sort did not prioritize the preview rarity/release metadata",
-        );
-        assert.deepEqual([...sorted].sort(), [...allIds].sort());
-      }
-      await selectSort(page, /number/);
-    });
-    await test("keyboard selection updates details and unknown cards stay obscured", async () => {
-      const unknown = cards(page)
-        .filter({ hasText: /\?\?\?/ })
-        .first();
-      assert(await unknown.count(), "Missing undiscovered silhouette");
-      const unknownID = await unknown.getAttribute("data-card-id");
-      await unknown.focus();
-      await page.keyboard.press("Enter");
-      assert.match(
-        await page.locator("#selected-name").textContent(),
-        /\?\?\?|undiscovered|unknown/i,
-      );
-      const detail = await page.locator("#detail-panel").innerText();
-      assert.match(detail, /not discovered|undiscovered|unknown/i);
-      assert(
-        !/Physical Serial\s+[A-Z]\d{3}-\d+/.test(detail),
-        "Unknown card leaks a physical serial",
-      );
-      const selected = page.locator(
-        `#collection-grid [data-card-id="${unknownID}"]`,
-      );
-      assert.equal(await selected.getAttribute("aria-pressed"), "true");
-      const ashenling = cards(page)
-        .filter({ hasText: /Ashenling/i })
-        .first();
-      await ashenling.focus();
-      await page.keyboard.press("Space");
-      assert.match(
-        await page.locator("#selected-name").textContent(),
-        /Ashenling/i,
-      );
-    });
-    await test("full detail dialog opens, traps focus, closes with Escape, and restores focus", async () => {
-      const open = page
-        .locator("#detail-panel")
-        .getByRole("button", { name: /view full details/i });
-      await open.click();
-      const dialog = page.locator("#veiling-dialog");
-      assert(await dialog.isVisible());
-      assert(await dialog.evaluate((node) => node.open));
-      assert.match(await dialog.innerText(), /Ashenling/i);
-      for (let i = 0; i < 12; i++) {
-        await page.keyboard.press("Tab");
-        // Native dialogs may cycle through browser chrome (activeElement=body).
-        // They must never put focus on a background application control.
-        assert(
-          await dialog.evaluate(
-            (node) =>
-              node.contains(document.activeElement) ||
-              document.activeElement === document.body,
-          ),
-        );
-      }
-      assert(
-        await page.evaluate(() => {
-          document.querySelector("#claim-open").focus();
-          return (
-            document.activeElement !== document.querySelector("#claim-open")
+      try {
+        for (const route of [
+          "dashboard",
+          "collection",
+          "achievements",
+          "discoveries",
+          "admin",
+          "transfers",
+          "settings",
+          "update-password",
+        ]) {
+          await guest.goto(`${base}/spinarium/#${route}`, {
+            waitUntil: "networkidle",
+          });
+          await guest.waitForFunction(
+            () => !document.querySelector("#auth-view").hidden,
           );
-        }),
-        "Background controls can steal modal focus",
-      );
-      await dialog
-        .getByRole("button", { name: /close Veiling details/i })
-        .focus();
-      await page.keyboard.press("Escape");
-      assert(await dialog.isHidden());
-      assert(await open.evaluate((node) => node === document.activeElement));
-    });
-    await test("claim flow explains the unavailable service and cannot mutate ownership or submit secrets", async () => {
-      const before = await page.evaluate(() => ({
-        local: { ...localStorage },
-        session: { ...sessionStorage },
-        cookies: document.cookie,
-      }));
-      const beforeCards = await cardIDs(page);
-      const offset = requests.length;
-      const opener = page.locator("#claim-open");
-      await opener.click();
-      const dialog = page.locator("#claim-dialog");
-      assert(await dialog.isVisible());
-      assert.match(
-        await dialog.innerText(),
-        /not (?:yet )?(?:available|connected|enabled)|coming|unavailable|disabled|requires.*server|server.*required/i,
-      );
-      assert(await page.locator("#claim-code").isDisabled());
-      assert(await page.locator("#claim-submit").isDisabled());
-      assert(
-        (await page.locator("#claim-code").inputValue()) === "",
-        "Claim field should not contain a sample secret",
-      );
-      await page.keyboard.press("Escape");
-      assert(await dialog.isHidden());
-      assert(await opener.evaluate((node) => node === document.activeElement));
-      assert.deepEqual(await cardIDs(page), beforeCards);
-      assert.deepEqual(
-        await page.evaluate(() => ({
-          local: { ...localStorage },
-          session: { ...sessionStorage },
-          cookies: document.cookie,
-        })),
-        before,
-      );
-      assert(
-        requests
-          .slice(offset)
-          .every((request) => request.method === "GET" && !request.body),
-        "Claim UI submitted a request",
-      );
-    });
-    await test("sidebar routes and direct links expose independent sections", async () => {
-      for (const route of [
-        "collection",
-        "achievements",
-        "discoveries",
-        "transfers",
-        "settings",
-        "collections",
-        "events",
-        "news",
-      ]) {
-        await page.goto(`${base}/spinarium/#${route}`, {
-          waitUntil: "networkidle",
-        });
-        assert(new URL(page.url()).hash === `#${route}`);
-        if (route === "collection") {
-          assert(
-            await page.locator("#collection-grid").isVisible(),
-            "Collection route did not show the collection",
+          assert.equal(
+            await guest.locator("#auth-title").innerText(),
+            "Enter your Spinarium",
           );
-        } else {
-          assert(
-            await page.locator("#route-title").isVisible(),
-            `Missing heading for ${route}`,
-          );
-          assert.match(
-            await page.locator("#route-title").textContent(),
-            new RegExp(
-              route === "discoveries"
-                ? "discovery|discoveries"
-                : route === "events"
-                  ? "events|gatherings"
-                  : route === "news"
-                    ? "news|archive"
-                    : route,
-              "i",
-            ),
+          assert(await guest.locator("#auth-confirm-group").isHidden());
+          if (route !== "update-password")
+            assert.equal(new URL(guest.url()).hash, "#signin");
+          assert(await guest.locator("#dashboard-view").isHidden());
+          assert(await guest.locator("#admin-view").isHidden());
+          assert.equal(
+            await guest.locator("#collection-grid [data-card-id]").count(),
+            0,
           );
         }
+      } finally {
+        await guest.evaluate(() => localStorage.clear());
       }
+    });
+    await test("unconfigured auth callbacks scrub credentials from the address before failing closed", async () => {
+      await guest.goto(
+        `${base}/spinarium/#access_token=${fixtureToken}&refresh_token=test-only-refresh-token&token_type=bearer&expires_in=3600`,
+        { waitUntil: "networkidle" },
+      );
+      await guest.waitForFunction(
+        () => !location.hash.includes("access_token"),
+      );
+      assert(!guest.url().includes(fixtureToken));
+      assert(await guest.locator("#auth-view").isVisible());
+      assert(await guest.locator("#dashboard-view").isHidden());
+      assert.deepEqual(await storage(guest), {
+        local: {},
+        session: {},
+        cookie: "",
+      });
+    });
+    for (const width of [320, 390, 768, 1280]) {
+      for (const scale of [100, 200])
+        await test(`account entry fits ${width}px at ${scale}% text`, () =>
+          checkOverflow(guest, width, scale));
+    }
+    await guest.evaluate(() => {
+      document.documentElement.style.fontSize = "";
+    });
+    for (const width of [390, 1280])
+      await test(`account entry WCAG 2.1 AA at ${width}px`, async () => {
+        await guest.setViewportSize({ width, height: 900 });
+        await checkAxe(guest);
+      });
+    const configured = await createFixture(browser);
+    contexts.push(configured.context);
+    const { page, calls, observed } = configured;
+    await test("configured public entry still requires authentication before any private API request", async () => {
+      assert(await page.locator("#auth-view").isVisible());
+      assert(await page.locator("#dashboard-view").isHidden());
+      assert.equal(calls.length, 0);
+      await assertBlankCards(page, "#auth-view", 3);
+    });
+    await test("provider-verified sign-in opens a genuinely empty account without fabricated ownership", async () => {
+      await signIn(page);
+      await page.waitForSelector("#dashboard-view:not([hidden])");
+      assert(await page.locator("#auth-view").isHidden());
+      assert.equal(
+        await page.locator("#profile-name").innerText(),
+        fixtureUser.email,
+      );
+      assert.deepEqual(
+        await page.locator("#stats .stat-card strong").allTextContents(),
+        ["0", "0", "0", "0", "2026"],
+      );
+      assert.equal(
+        await page.locator("#collection-grid [data-card-id]").count(),
+        0,
+      );
+      assert.match(
+        await page.locator("#collection-status").innerText(),
+        /collection is empty/i,
+      );
+      await assertBlankCards(page, "#collection-grid", 10);
+      assert(
+        calls.some(
+          (call) => call.path === "/auth/v1/user" && call.hasAuthorization,
+        ),
+      );
+      assert(
+        calls.some(
+          (call) =>
+            call.path === "/rest/v1/rpc/spinarium_dashboard" &&
+            call.hasAuthorization,
+        ),
+      );
+      assert.deepEqual(await storage(page), {
+        local: {},
+        session: {},
+        cookie: "",
+      });
+      assertNoDemoRequests(observed.requests);
+      assertNoSecretsInURLs(observed.requests);
+    });
+    await test("empty collection search, filters, and all sorts preserve black slots without invented records", async () => {
+      await page.locator("#collection-search").fill("no such card");
+      await assertBlankCards(page, "#collection-grid", 10);
+      await page.locator("#collection-search").fill("");
+      for (const value of ["all", "owned", "discovered", "unowned"]) {
+        await page
+          .locator(`#collection-filter [data-filter="${value}"]`)
+          .click();
+        assert.equal(
+          await page
+            .locator(`#collection-filter [data-filter="${value}"]`)
+            .getAttribute("aria-pressed"),
+          "true",
+        );
+        assert.equal(
+          await page.locator("#collection-grid [data-card-id]").count(),
+          0,
+        );
+      }
+      for (const value of ["number", "name", "rarity", "release"])
+        await page.locator("#collection-sort").selectOption(value);
+      await assertBlankCards(page, "#collection-grid", 10);
+      await page.locator('#collection-filter [data-filter="owned"]').click();
+      await page.locator("#collection-sort").selectOption("number");
+    });
+    await test("server-admin denial overrides provider metadata and prevents catalog access or writes", async () => {
+      assert(await page.locator("#admin-nav").isHidden());
+      await page.goto(`${base}/spinarium/#admin`, { waitUntil: "networkidle" });
+      await page.waitForSelector("#route-title");
+      assert.match(
+        await page.locator("#route-title").innerText(),
+        /admin access required/i,
+      );
+      assert(await page.locator("#admin-view").isHidden());
+      await page.evaluate(() =>
+        document
+          .querySelector("#admin-form")
+          .dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+          ),
+      );
+      assert(
+        !calls.some((call) => call.path === "/rest/v1/spinarium_veilings"),
+      );
       await page.goto(`${base}/spinarium/#dashboard`, {
         waitUntil: "networkidle",
       });
-      await page.locator('#sidebar-nav a[href="#collection"]').click();
-      assert.equal(new URL(page.url()).hash, "#collection");
-      await page.goBack();
-      assert.equal(new URL(page.url()).hash, "#dashboard");
+    });
+    await test("claim flow remains disabled, does not accept secrets, and cannot grant ownership", async () => {
+      const before = await storage(page);
+      const count = calls.length;
+      await page.locator("#claim-open").click();
+      assert(await page.locator("#claim-dialog").isVisible());
+      assert(await page.locator("#claim-code").isDisabled());
+      assert(await page.locator("#claim-submit").isDisabled());
+      assert.equal(await page.locator("#claim-code").inputValue(), "");
+      await checkAxe(page);
+      await page.keyboard.press("Escape");
+      assert(await page.locator("#claim-dialog").isHidden());
+      assert.equal(calls.length, count);
+      assert.deepEqual(await storage(page), before);
+      assert.equal(
+        await page.locator("#collection-grid [data-card-id]").count(),
+        0,
+      );
     });
     for (const width of [320, 390, 768, 1280]) {
-      for (const textScale of [100, 200]) {
-        await test(`dashboard fits ${width}px at ${textScale}% text`, async () => {
-          await page.setViewportSize({ width, height: 853 });
-          await page.evaluate((scale) => {
-            document.documentElement.style.fontSize = `${scale}%`;
-          }, textScale);
-          const size = await overflow(page);
-          assert(size.document <= size.viewport + 1, JSON.stringify(size));
-        });
-      }
+      for (const scale of [100, 200])
+        await test(`empty account fits ${width}px at ${scale}% text`, () =>
+          checkOverflow(page, width, scale));
     }
     await page.evaluate(() => {
       document.documentElement.style.fontSize = "";
     });
-    await test("mobile navigation supports Escape and route selection", async () => {
+    await test("authenticated mobile navigation closes with Escape and after selecting a route", async () => {
       await page.setViewportSize({ width: 390, height: 844 });
       const toggle = page.locator("#navigation-toggle");
       await toggle.click();
       assert.equal(await toggle.getAttribute("aria-expanded"), "true");
       await page.keyboard.press("Escape");
-      await page.waitForFunction(
-        () =>
-          document
-            .querySelector("#navigation-toggle")
-            .getAttribute("aria-expanded") === "false",
-      );
       assert.equal(await toggle.getAttribute("aria-expanded"), "false");
-      assert(await toggle.evaluate((node) => node === document.activeElement));
       await toggle.click();
       await page.locator('#sidebar-nav a[href="#achievements"]').click();
-      assert.equal(new URL(page.url()).hash, "#achievements");
       await page.waitForFunction(
         () =>
           document
             .querySelector("#navigation-toggle")
             .getAttribute("aria-expanded") === "false",
       );
-      assert.equal(await toggle.getAttribute("aria-expanded"), "false");
       await page.goto(`${base}/spinarium/#dashboard`, {
         waitUntil: "networkidle",
       });
     });
-    await test("mobile card selection opens an accessible detail sheet for a discovered unowned Veiling", async () => {
-      await page.setViewportSize({ width: 390, height: 844 });
-      const crystal = page.locator(
-        '#collection-grid [data-card-id="crysthale"]',
-      );
-      await crystal.click();
-      const dialog = page.locator("#veiling-dialog");
-      assert(await dialog.isVisible());
-      assert.match(await dialog.innerText(), /Crysthale/);
-      assert.match(await dialog.innerText(), /Not owned/);
-      assert.match(await dialog.innerText(), /Not claimed/);
-      await page.addScriptTag({ path: axePath });
-      const result = await page.evaluate(() =>
-        axe.run(document, {
-          runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
-        }),
-      );
-      assert.deepEqual(
-        result.violations.map((violation) => ({
-          id: violation.id,
-          targets: violation.nodes.map((node) => node.target),
-        })),
-        [],
-      );
-      await page.keyboard.press("Escape");
-      assert(await dialog.isHidden());
-      assert(await crystal.evaluate((node) => node === document.activeElement));
-      const ash = page.locator('#collection-grid [data-card-id="ashenling"]');
-      await ash.click();
-      await page.keyboard.press("Escape");
-      assert(await dialog.isHidden());
-      assert(
-        await page
-          .locator("#detail-panel")
-          .getByRole("button", { name: /View in 3D/ })
-          .isDisabled(),
-      );
-    });
-    for (const width of [390, 1280]) {
-      await test(`WCAG 2.1 AA automated checks at ${width}px with reduced motion`, async () => {
-        await page.setViewportSize({ width, height: 853 });
-        await page.addScriptTag({ path: axePath });
-        const result = await page.evaluate(() =>
-          axe.run(document, {
-            runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
-          }),
-        );
-        assert.deepEqual(
-          result.violations.map((violation) => ({
-            id: violation.id,
-            impact: violation.impact,
-            nodes: violation.nodes.map((node) => ({
-              target: node.target,
-              summary: node.failureSummary,
-            })),
-          })),
-          [],
-        );
-        const prolonged = await page.evaluate(() =>
-          [...document.querySelectorAll("body *")]
-            .filter((node) => {
-              const style = getComputedStyle(node);
-              return (
-                style.animationName !== "none" &&
-                style.animationDuration
-                  .split(",")
-                  .some((duration) => parseFloat(duration) > 0.01)
-              );
-            })
-            .map((node) => node.id || node.className),
-        );
-        assert.deepEqual(
-          prolonged,
-          [],
-          "Motion continues despite reduced-motion preference",
-        );
+    for (const width of [390, 1280])
+      await test(`empty account WCAG 2.1 AA at ${width}px`, async () => {
+        await page.setViewportSize({ width, height: 900 });
+        await checkAxe(page);
       });
-    }
-    await test("claim dialog passes automated accessibility checks", async () => {
-      await page.locator("#claim-open").click();
-      const result = await page.evaluate(() =>
-        axe.run(document, {
-          runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
-        }),
-      );
-      assert.deepEqual(
-        result.violations.map((violation) => ({
-          id: violation.id,
-          targets: violation.nodes.map((node) => node.target),
-        })),
-        [],
-      );
-      await page.keyboard.press("Escape");
+    await test("sign-out clears private content and tokens; reload requires sign-in", async () => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.locator("#sign-out").click();
+      await page.waitForSelector("#auth-view:not([hidden])");
+      assert(await page.locator("#dashboard-view").isHidden());
+      assert.equal(await page.locator("#stats").innerText(), "");
+      assert.equal(await page.locator("#collection-grid").innerText(), "");
+      assert.deepEqual(await storage(page), {
+        local: {},
+        session: {},
+        cookie: "",
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      assert(await page.locator("#auth-view").isVisible());
+      assert(await page.locator("#dashboard-view").isHidden());
+      assertNoSecretsInURLs(observed.requests);
     });
-    await test("all runtime requests are local read-only assets with no script errors", async () => {
-      assert.deepEqual(errors, []);
-      assert.deepEqual(failedResponses, []);
-      assert(
-        requests.every(
-          (request) => new URL(request.url).origin === new URL(base).origin,
-        ),
-        "Third-party runtime request",
+    for (const scenario of ["invalid-login", "unverified-user"])
+      await test(`${scenario} cannot open a collection or expose provider errors`, async () => {
+        const rejected = await createFixture(browser, scenario);
+        contexts.push(rejected.context);
+        await signIn(rejected.page);
+        await rejected.page.waitForFunction(
+          () =>
+            !document.querySelector("#auth-fields").disabled &&
+            document.querySelector("#auth-feedback").textContent !==
+              "Please wait…",
+        );
+        assert(await rejected.page.locator("#auth-view").isVisible());
+        assert(await rejected.page.locator("#dashboard-view").isHidden());
+        assert(!rejected.calls.some((call) => call.path.startsWith("/rest/")));
+        assert.doesNotMatch(
+          await rejected.page.locator("#auth-feedback").innerText(),
+          /test-only-password|Provider detail/,
+        );
+        assert.equal(
+          await rejected.page.locator("#auth-password").inputValue(),
+          "",
+        );
+        assert.deepEqual(await storage(rejected.page), {
+          local: {},
+          session: {},
+          cookie: "",
+        });
+      });
+    await test("signup awaiting email confirmation never creates an authenticated collection", async () => {
+      const signup = await createFixture(browser, "signup");
+      contexts.push(signup.context);
+      await signup.page.locator("#signup-tab").click();
+      await signup.page.waitForFunction(
+        () => !document.querySelector("#auth-confirm-group").hidden,
       );
+      await signup.page.locator("#auth-email").fill(fixtureUser.email);
+      await signup.page.locator("#auth-password").fill(fixturePassword);
+      await signup.page.locator("#auth-confirm-password").fill(fixturePassword);
+      await signup.page.locator("#auth-submit").click();
+      await signup.page.waitForFunction(() =>
+        document
+          .querySelector("#auth-feedback")
+          .textContent.includes("Check your email"),
+      );
+      assert(await signup.page.locator("#auth-view").isVisible());
+      assert(await signup.page.locator("#dashboard-view").isHidden());
+      assert(!signup.calls.some((call) => call.path.startsWith("/rest/")));
+      assert.equal(
+        await signup.page.locator("#auth-password").inputValue(),
+        "",
+      );
+      assert.equal(
+        await signup.page.locator("#auth-confirm-password").inputValue(),
+        "",
+      );
+      assert.deepEqual(await storage(signup.page), {
+        local: {},
+        session: {},
+        cookie: "",
+      });
+    });
+    await test("runtime has no demo requests, persistent sessions, script errors, or unexpected failed assets", async () => {
+      assert.deepEqual(observedGuest.errors, []);
+      assert.deepEqual(observedGuest.failedResponses, []);
+      assert.deepEqual(observed.errors, []);
+      assert.deepEqual(observed.failedResponses, []);
+      assertNoDemoRequests([...observedGuest.requests, ...observed.requests]);
+      assertNoSecretsInURLs([...observedGuest.requests, ...observed.requests]);
       assert(
-        requests.every((request) => request.method === "GET" && !request.body),
-        "Unexpected state-changing request",
+        observedGuest.requests.every(
+          (request) => request.method === "GET" && !request.hasBody,
+        ),
       );
     });
     if (process.env.SCREENSHOT_DIR) {
+      await guest.goto(`${base}/spinarium/#signin`, {
+        waitUntil: "networkidle",
+      });
       fs.mkdirSync(process.env.SCREENSHOT_DIR, { recursive: true });
       for (const [name, width, height] of [
-        ["spinarium-desktop", 1280, 853],
-        ["spinarium-mobile", 390, 844],
+        ["spinarium-signin-desktop", 1280, 900],
+        ["spinarium-signin-mobile", 390, 844],
       ]) {
-        await page.setViewportSize({ width, height });
-        await page.evaluate(() => {
+        await guest.setViewportSize({ width, height });
+        await guest.evaluate(() => {
           document.activeElement?.blur();
           scrollTo(0, 0);
         });
-        await page.screenshot({
+        await guest.screenshot({
           path: path.join(process.env.SCREENSHOT_DIR, `${name}.png`),
           fullPage: true,
         });
       }
     }
-    await test("JavaScript-disabled page communicates preview limitations and links home", async () => {
-      const fallback = await browser.newContext({
+    await test("JavaScript-disabled account entry stays gated and offers a home link", async () => {
+      const context = await browser.newContext({
         javaScriptEnabled: false,
         viewport: { width: 320, height: 800 },
       });
-      const fallbackPage = await fallback.newPage();
-      try {
-        await fallbackPage.goto(`${base}/spinarium/`);
-        assert.match(
-          await fallbackPage.locator("noscript").innerText(),
-          /JavaScript/i,
-        );
-        const home = fallbackPage
-          .locator('a[href="../"], a[href="../index.html"]')
-          .first();
-        assert(await home.count(), "No return-home link");
-        await home.click();
-        assert.equal(new URL(fallbackPage.url()).pathname, "/");
-        assert.match(await fallbackPage.title(), /SpinDownGames/);
-      } finally {
-        await fallback.close();
-      }
+      contexts.push(context);
+      const page = await context.newPage();
+      await page.goto(`${base}/spinarium/`);
+      assert(await page.locator("#dashboard-view").isHidden());
+      assert(await page.locator("#auth-email").isDisabled());
+      assert.match(await page.locator("noscript").innerText(), /JavaScript/i);
+      await page.locator('a[href="../"]').first().click();
+      assert.match(await page.title(), /SpinDownGames/);
     });
   } finally {
-    await context.close();
+    await Promise.all(contexts.map((context) => context.close()));
     await browser.close();
   }
   if (issues.length) {
     console.error(`\n${issues.length} failed checks.`);
     process.exitCode = 1;
-  } else console.log("\nAll Spinarium checks passed.");
+  } else console.log("\nAll account-gated Spinarium checks passed.");
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

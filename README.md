@@ -29,7 +29,7 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 - `assets/coin.glb` and `assets/coin-poster.webp`: existing coin geometry and still preview.
 - `assets/fonts/`: Anton and DM Sans, distributed with their SIL Open Font Licenses.
 - `scripts/verify.cjs`: browser checks for interactions, responsive layout, accessibility, and fallbacks.
-- `spinarium/`: separate cinematic Veiling collection preview at `/spinarium/`, with reusable native modules, isolated read-only demo data, and an unavailable registration flow. The homepage's **View Spinarium** button is its entry point.
+- `spinarium/`: separate cinematic account-gated collection area at `/spinarium/`, with reusable native modules, plain black empty slots, Supabase account/catalog adapters, and an unavailable physical-card registration flow. Account configuration remains disabled until a dedicated backend is installed and verified. The homepage's **View Spinarium** button is its entry point.
 - `docs/SPINARIUM-ARCHITECTURE.md`: Spinarium service boundary, domain relationships, and requirements for future authenticated ownership and secure claiming.
 - `assets/spinarium/`: replaceable original concept artwork with provenance; these images and the sample lore are not finalized canon.
 - `scripts/verify-spinarium-domain.mjs` and `scripts/verify-spinarium.cjs`: Spinarium domain/browser checks and original-site preservation checks. See `spinarium/README.md` for setup.
