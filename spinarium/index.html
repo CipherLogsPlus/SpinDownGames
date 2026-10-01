@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#080d12" />
+    <meta
+      name="description"
+      content="Enter Spinarium by SpinDownGames™. Real artifacts. Living stories. Explore a preview of the Veiling collection platform."
+    />
+    <link rel="canonical" href="https://spindowngames.com/spinarium/" />
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+    <link
+      rel="preload"
+      href="../assets/fonts/dm-sans.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="app.js"></script>
+    <title>Spinarium — SpinDownGames™</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to Spinarium</a>
+    <header class="topbar">
+      <a class="brand" href="../" aria-label="SpinDownGames™ home">
+        <img src="../assets/brand.webp" width="40" height="40" alt="" />
+        <span>SpinDownGames<sup>™</sup></span>
+      </a>
+      <nav class="topnav" aria-label="SpinDownGames navigation">
+        <a href="../">Home</a
+        ><a href="#dashboard" data-nav="dashboard">Spinarium</a>
+        <a href="#collection" data-nav="collection">Veilings</a>
+        <a href="#collections" data-nav="collections">Collections</a>
+        <a href="#events" data-nav="events">Events</a
+        ><a href="#news" data-nav="news">News</a>
+        <a
+          href="https://discord.gg/CK7rKFJVPX"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Community<span class="sr-only"> (opens in a new tab)</span></a
+        >
+      </nav>
+      <div class="account-tools">
+        <form id="catalog-search-form" class="catalog-search" role="search">
+          <label class="search-box"
+            ><span data-icon="search"></span
+            ><span class="sr-only">Search Veilings</span
+            ><input
+              id="catalog-search"
+              type="search"
+              placeholder="Search Veilings…"
+              maxlength="100"
+              autocomplete="off"
+          /></label>
+        </form>
+        <button
+          class="icon-button notification-button"
+          type="button"
+          disabled
+          aria-label="Notifications unavailable in preview"
+          title="Notifications are not available in this preview"
+        >
+          <span data-icon="bell"></span>
+        </button>
+        <div class="profile">
+          <span class="avatar" aria-hidden="true">✧</span>
+          <div>
+            <span>Demo collector</span><small>Preview collection</small>
+          </div>
+        </div>
+      </div>
+      <button
+        id="navigation-toggle"
+        class="icon-button mobile-menu"
+        type="button"
+        aria-controls="sidebar-nav"
+        aria-expanded="false"
+        hidden
+      >
+        <span data-icon="menu"></span
+        ><span class="sr-only">Open Spinarium navigation</span>
+      </button>
+    </header>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar-nav" aria-label="Spinarium navigation">
+        <nav class="side-links" aria-label="Your Spinarium">
+          <a href="#dashboard" data-nav="dashboard"
+            ><span data-icon="cube"></span>My Spinarium</a
+          >
+          <a href="#collection" data-nav="collection"
+            ><span data-icon="cards"></span>My Collection</a
+          >
+          <a href="#achievements" data-nav="achievements"
+            ><span data-icon="trophy"></span>Achievements</a
+          >
+          <a href="#discoveries" data-nav="discoveries"
+            ><span data-icon="discovery"></span>Discovery Log</a
+          >
+          <a href="#transfers" data-nav="transfers"
+            ><span data-icon="transfer"></span>Transfers</a
+          >
+          <a href="#settings" data-nav="settings"
+            ><span data-icon="settings"></span>Settings</a
+          >
+        </nav>
+        <div class="sidebar-story" aria-hidden="true">
+          <div class="sigil">
+            <img src="../assets/favicon.svg" alt="" width="72" height="72" />
+          </div>
+          <p>More<br />than cards.<br />A deeper<br />collection.</p>
+          <span class="fine-rule"></span>
+        </div>
+        <div class="side-brand">
+          SpinDownGames<sup>™</sup><small>Collect · Discover · Belong</small>
+        </div>
+      </aside>
+      <main id="main-content" tabindex="-1">
+        <section class="hero" aria-labelledby="spinarium-title">
+          <div class="hero-copy">
+            <p class="eyebrow">The world beyond the artifact</p>
+            <h1 id="spinarium-title">Spinarium</h1>
+            <p class="hero-subtitle">Your Collection. A Larger World.</p>
+            <div class="hero-divider" aria-hidden="true"><span>◇</span></div>
+            <p class="hero-tagline">Real artifacts. Living stories.</p>
+          </div>
+          <div class="hero-aside">
+            <p>Some things<br />are meant<br />to be found.</p>
+            <button id="claim-open" type="button" class="claim-entry">
+              <span data-icon="key"></span>Register a card
+            </button>
+          </div>
+        </section>
+        <div class="preview-note">
+          <span class="preview-dot" aria-hidden="true"></span
+          ><strong>Collection preview</strong
+          ><span
+            >Sample ownership, lore &amp; concept artwork. Accounts and
+            registration are not live.</span
+          >
+        </div>
+        <div id="loading-status" role="status">Opening the archive…</div>
+        <div id="dashboard-view" hidden>
+          <div class="dashboard-layout">
+            <section
+              id="stats"
+              class="stat-row"
+              aria-label="Sample collection statistics"
+            ></section>
+            <section
+              class="panel collection-panel"
+              aria-labelledby="collection-title"
+            >
+              <h2 id="collection-title" class="sr-only">Veiling collection</h2>
+              <div class="collection-toolbar">
+                <div
+                  id="collection-filter"
+                  class="filter-tabs"
+                  role="group"
+                  aria-label="Filter Veilings"
+                >
+                  <button type="button" data-filter="all" aria-pressed="true">
+                    All Veilings
+                  </button>
+                  <button
+                    type="button"
+                    data-filter="owned"
+                    aria-pressed="false"
+                  >
+                    Owned
+                  </button>
+                  <button
+                    type="button"
+                    data-filter="discovered"
+                    aria-pressed="false"
+                  >
+                    Discovered
+                  </button>
+                  <button
+                    type="button"
+                    data-filter="unowned"
+                    aria-pressed="false"
+                  >
+                    Unowned
+                  </button>
+                  <button
+                    type="button"
+                    data-filter="undiscovered"
+                    aria-pressed="false"
+                  >
+                    Undiscovered
+                  </button>
+                </div>
+                <div class="collection-tools">
+                  <label class="search-box"
+                    ><span data-icon="search"></span
+                    ><span class="sr-only">Search your collection</span
+                    ><input
+                      id="collection-search"
+                      type="search"
+                      placeholder="Search your collection…"
+                      maxlength="100"
+                      autocomplete="off"
+                  /></label>
+                  <label class="sort-box"
+                    ><span class="sr-only">Sort Veilings</span
+                    ><select id="collection-sort">
+                      <option value="number">Sort: Number</option>
+                      <option value="name">Sort: Name</option>
+                      <option value="rarity">Sort: Rarity</option>
+                      <option value="release">Sort: Release</option>
+                    </select></label
+                  >
+                </div>
+              </div>
+              <div id="collection-grid" class="collection-grid"></div>
+              <p
+                id="collection-status"
+                class="collection-status"
+                role="status"
+              ></p>
+            </section>
+            <section
+              id="detail-panel"
+              class="panel detail-panel"
+              aria-labelledby="selected-name"
+            ></section>
+            <div id="dashboard-footer" class="dashboard-footer"></div>
+          </div>
+        </div>
+        <section
+          id="route-view"
+          class="panel route-panel"
+          aria-labelledby="route-title"
+          hidden
+        >
+          <div id="route-content"></div>
+        </section>
+        <noscript
+          ><section class="panel no-script">
+            <h2>The archive awaits</h2>
+            <p>
+              This interactive collection preview needs JavaScript. Real
+              accounts and card registration are not available yet.
+            </p>
+            <a href="../">Return to SpinDownGames™</a>
+          </section></noscript
+        >
+        <footer class="page-footer">
+          <span>Spinarium · SpinDownGames<sup>™</sup></span>
+          <nav aria-label="Legal">
+            <a href="../privacy.html">Privacy</a
+            ><a href="../terms.html">Terms</a>
+          </nav>
+        </footer>
+      </main>
+    </div>
+    <dialog id="claim-dialog" aria-labelledby="claim-title" class="modal">
+      <button
+        class="modal-close icon-button"
+        type="button"
+        data-close-dialog
+        aria-label="Close registration"
+      >
+        <span data-icon="close"></span>
+      </button>
+      <p class="eyebrow">Physical artifact · Digital world</p>
+      <h2 id="claim-title">Register a Veiling</h2>
+      <p>
+        Your engraved card is the artifact. Its separate registration card will
+        unlock the full-color Veiling in your Spinarium.
+      </p>
+      <div class="availability-note">
+        <strong>Registration is not available yet.</strong>
+        <p>
+          This preview cannot validate a code or grant ownership. Please keep
+          your registration card and claim code private.
+        </p>
+      </div>
+      <form id="claim-form">
+        <label for="claim-code"
+          >Claim code <span>from the printed registration card</span></label
+        ><input
+          id="claim-code"
+          type="text"
+          placeholder="Registration opens with secure accounts"
+          disabled
+          autocomplete="off"
+        /><button
+          id="claim-submit"
+          type="submit"
+          class="outlined-button"
+          disabled
+        >
+          Registration coming later
+        </button>
+      </form>
+      <p class="small-note">
+        A QR code and its printed claim code will represent the same one-time
+        credential. A physical serial number is not a claim code. Legacy
+        editions may have no registration credential.
+      </p>
+    </dialog>
+    <dialog
+      id="veiling-dialog"
+      aria-labelledby="full-detail-name"
+      class="modal full-detail-modal"
+    >
+      <button
+        class="modal-close icon-button"
+        type="button"
+        data-close-dialog
+        aria-label="Close Veiling details"
+      >
+        <span data-icon="close"></span>
+      </button>
+      <div id="full-detail-content"></div>
+    </dialog>
+  </body>
+</html>
