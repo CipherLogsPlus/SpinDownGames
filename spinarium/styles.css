@@ -2687,6 +2687,9 @@ p {
   .first-login-intro .intro-roll { display: none; }
 }
 /* A quiet entry keeps the first-login world reveal a surprise. */
+body.intro-staging .topbar, body.intro-staging .sidebar,
+body.intro-staging .hero, body.intro-staging #collection-notice,
+body.intro-staging #dashboard-view, body.intro-staging .page-footer { opacity: 0; }
 body.auth-gated .hero,
 body.auth-gated .topnav,
 body.auth-gated .guest-tools,

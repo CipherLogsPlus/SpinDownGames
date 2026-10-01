@@ -16,14 +16,17 @@ Signup and recovery are unavailable in this mode.
 The first preview login fades into a black screen. A curved scroll unfurls at
 center, “Welcome to your Spinarium” fades in alongside browser-generated speech,
 then the scroll pauses, shrinks and moves to the top as the dashboard appears.
-The docked ribbon remains above the collection. Skip/Escape stop playback and
+The docked ribbon remains above the collection. Dashboard sections fade in from
+top to bottom, with collection cards sharing a delay when they occupy the same
+responsive grid row. The stagger runs only for this introduction, and animation
+state clears on logout. Skip/Escape stop playback and
 open the dashboard immediately. Reduced-motion visitors get a still welcome
 and an Enter Spinarium button without automatic voice or timed movement.
 
 Voice is provisional browser speech (when supported/permitted), not recorded
 character audio. Mute stops it; unavailable or blocked speech never prevents
 entry. All timers and speech clear on skip, logout, or dialog closure.
-Completion uses only `spinarium.preview.introduction.v2`, a browser-local seen
+Completion uses only `spinarium.preview.introduction.v3`, a browser-local seen
 preference. The revised sequence gets its own version so earlier preview visitors
 can see it once. Real per-account onboarding remains a future backend feature.
 

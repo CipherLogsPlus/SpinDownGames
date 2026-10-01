@@ -1,6 +1,6 @@
 /** Presentation-only onboarding; device preference never grants access. */
-export function createFirstLoginIntro(dialog, { storage = () => localStorage, dock, focusTarget } = {}) {
-  const key = "spinarium.preview.introduction.v2";
+export function createFirstLoginIntro(dialog, { storage = () => localStorage, dock, focusTarget, onPrepare, onReveal, onReset } = {}) {
+  const key = "spinarium.preview.introduction.v3";
   const phrase = "Welcome to your Spinarium";
   const position = dialog.querySelector(".intro-banner-position");
   const banner = dialog.querySelector(".intro-banner");
@@ -21,6 +21,7 @@ export function createFirstLoginIntro(dialog, { storage = () => localStorage, do
     try { storage().setItem(key, "seen"); } catch { /* Optional device preference. */ }
     if (keepRibbon && dock) { dock.append(banner); dock.hidden = false; }
     else if (dock) dock.hidden = true;
+    if (!keepRibbon) onReset?.();
     dialog.close();
     focusTarget?.focus({ preventScroll: true });
   }
@@ -36,7 +37,7 @@ export function createFirstLoginIntro(dialog, { storage = () => localStorage, do
       dialog.style.setProperty("--dock-left", `${rect.left + rect.width / 2}px`);
       dialog.style.setProperty("--dock-scale", String(Math.min(1, rect.width / initial.width)));
     }
-    later(() => { dialog.dataset.phase = "reveal"; }, 1900);
+    later(() => { onReveal?.(); dialog.dataset.phase = "reveal"; }, 1900);
     later(() => finish(true), 3400);
   }
   function greeting() {
@@ -86,12 +87,14 @@ export function createFirstLoginIntro(dialog, { storage = () => localStorage, do
       dialog.querySelector(".intro-skip").focus();
       if (reduced) dialog.dataset.phase = "hold";
       else {
+        onPrepare?.();
         later(() => { dialog.dataset.phase = "unfurl"; }, 650);
         later(greeting, 3750);
       }
       return true;
     },
     reset() {
+      onReset?.();
       active = false; clear(); stopVoice();
       position.append(banner);
       if (dock) dock.hidden = true;

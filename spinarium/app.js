@@ -3,6 +3,7 @@ import { createAuthClient, AuthError } from "./auth/supabase-auth.js";
 import { createSpinariumService } from "./data/supabase-service.js";
 import { createPreviewAccess } from "./data/preview-service.js";
 import { createFirstLoginIntro } from "./components/first-login-intro.js";
+import { createDashboardReveal } from "./components/dashboard-reveal.js";
 import { getVeilingDetail, queryCollection } from "./domain/collection.js";
 import { hydrateIcons } from "./components/icons.js";
 import {
@@ -22,8 +23,11 @@ const adapters = preview ? createPreviewAccess() : null;
 const auth = adapters?.auth ?? createAuthClient(spinariumConfig);
 const service = adapters?.service ?? createSpinariumService(spinariumConfig, auth);
 const $ = (selector) => document.querySelector(selector);
+const dashboardReveal = createDashboardReveal(document.body);
 const firstLoginIntro = createFirstLoginIntro($("#first-login-intro"), {
   dock: $("#welcome-ribbon-dock"), focusTarget: $("#main-content"),
+  onPrepare: dashboardReveal.prepare, onReveal: dashboardReveal.reveal,
+  onReset: dashboardReveal.reset,
 });
 const mobile = matchMedia("(max-width: 640px)");
 const state = {
