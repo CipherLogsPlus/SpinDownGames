@@ -1,70 +1,101 @@
-/** Device-local introduction preference; never used for identity or access. */
-export function createFirstLoginIntro(dialog, { storage = () => localStorage } = {}) {
-  const key = "spinarium.preview.introduction.v1";
-  const stages = [
-    ["Beyond the metal", "Real artifacts.", "Living stories."],
-    ["A world waiting quietly", "Some things are", "meant to be found."],
-    ["Spinarium", "Your Collection.", "A Larger World."],
-  ];
-  let seen = false;
-  let timers = [];
-  const clear = () => { timers.forEach(clearTimeout); timers = []; };
-  const voiceButton = dialog.querySelector(".intro-voice");
-  const voiceStatus = dialog.querySelector(".intro-voice-status");
+/** Presentation-only onboarding; device preference never grants access. */
+export function createFirstLoginIntro(dialog, { storage = () => localStorage, dock, focusTarget } = {}) {
+  const key = "spinarium.preview.introduction.v2";
+  const phrase = "Welcome to your Spinarium";
+  const position = dialog.querySelector(".intro-banner-position");
+  const banner = dialog.querySelector(".intro-banner");
+  const enter = dialog.querySelector(".intro-enter");
+  const sound = dialog.querySelector(".intro-sound");
+  const status = dialog.querySelector(".intro-voice-status");
   const voiceAvailable = "speechSynthesis" in globalThis && "SpeechSynthesisUtterance" in globalThis;
-  voiceButton.hidden = !voiceAvailable;
-  voiceButton.addEventListener("click", () => {
-    if (!voiceAvailable) return;
-    speechSynthesis.cancel();
-    const line = new SpeechSynthesisUtterance("Welcome to your Spinarium.");
-    line.lang = "en-US";
-    line.rate = 0.8;
-    line.pitch = 0.85;
-    voiceButton.disabled = true;
-    voiceStatus.textContent = "Playing the welcome voice.";
-    line.onend = line.onerror = () => {
-      voiceButton.disabled = false;
-      voiceStatus.textContent = "";
-    };
-    speechSynthesis.speak(line);
-  });
-  function finish() {
+  let seen = false, muted = false, timers = [], active = false, docking = false;
+  const later = (fn, delay) => timers.push(setTimeout(() => { if (active) fn(); }, delay));
+  const clear = () => { timers.forEach(clearTimeout); timers = []; };
+  const stopVoice = () => { if (voiceAvailable) speechSynthesis.cancel(); };
+  function finish(keepRibbon = false) {
+    if (!active) return;
+    active = false;
     clear();
+    stopVoice();
     seen = true;
-    try { storage().setItem(key, "seen"); } catch { /* Memory-only fallback. */ }
+    try { storage().setItem(key, "seen"); } catch { /* Optional device preference. */ }
+    if (keepRibbon && dock) { dock.append(banner); dock.hidden = false; }
+    else if (dock) dock.hidden = true;
     dialog.close();
+    focusTarget?.focus({ preventScroll: true });
   }
-  function stage(index) {
-    dialog.dataset.stage = String(index);
-    const [eyebrow, title, subtitle] = stages[index];
-    dialog.querySelector(".intro-eyebrow").textContent = eyebrow;
-    dialog.querySelector(".intro-title").textContent = title;
-    dialog.querySelector(".intro-subtitle").textContent = subtitle;
-    dialog.querySelector(".intro-progress").textContent = `${index + 1} / ${stages.length}`;
-    dialog.querySelector(".intro-enter").hidden = index !== stages.length - 1;
+  function moveToTop() {
+    if (docking || !active) return;
+    docking = true;
+    dialog.dataset.phase = "dock";
+    if (dock) {
+      dock.hidden = false;
+      const rect = dock.getBoundingClientRect();
+      const initial = position.getBoundingClientRect();
+      dialog.style.setProperty("--dock-center", `${rect.top + rect.height / 2}px`);
+      dialog.style.setProperty("--dock-left", `${rect.left + rect.width / 2}px`);
+      dialog.style.setProperty("--dock-scale", String(Math.min(1, rect.width / initial.width)));
+    }
+    later(() => { dialog.dataset.phase = "reveal"; }, 1900);
+    later(() => finish(true), 3400);
   }
-  dialog.querySelector(".intro-skip").addEventListener("click", finish);
-  dialog.querySelector(".intro-enter").addEventListener("click", finish);
-  dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(); });
-  dialog.addEventListener("close", () => {
-    clear();
-    if (voiceAvailable) speechSynthesis.cancel();
-    voiceButton.disabled = false;
-    voiceStatus.textContent = "";
+  function greeting() {
+    dialog.dataset.phase = "lettering";
+    let textReady = false, voiceReady = !voiceAvailable || muted, holdScheduled = false;
+    const hold = () => {
+      if (!textReady || !voiceReady || holdScheduled || !active) return;
+      holdScheduled = true;
+      dialog.dataset.phase = "hold";
+      later(moveToTop, 1100);
+    };
+    later(() => { textReady = true; hold(); }, 1800);
+    // Provider/browser speech can fail or remain queued. Never trap the visitor.
+    later(() => { voiceReady = true; hold(); }, 6500);
+    if (voiceReady) return;
+    try {
+      const line = new SpeechSynthesisUtterance(phrase + ".");
+      line.lang = "en-US"; line.rate = 0.8; line.pitch = 0.85;
+      line.onend = line.onerror = () => { voiceReady = true; status.textContent = ""; hold(); };
+      status.textContent = "Welcome to your Spinarium.";
+      speechSynthesis.speak(line);
+    } catch { voiceReady = true; hold(); }
+  }
+  sound.hidden = !voiceAvailable;
+  sound.addEventListener("click", () => {
+    muted = !muted;
+    sound.textContent = muted ? "Enable voice" : "Mute voice";
+    sound.setAttribute("aria-pressed", String(muted));
+    if (muted) stopVoice();
   });
+  dialog.querySelector(".intro-skip").addEventListener("click", () => finish());
+  enter.addEventListener("click", () => finish());
+  dialog.addEventListener("cancel", event => { event.preventDefault(); finish(); });
+  dialog.addEventListener("close", () => { active = false; clear(); stopVoice(); });
   return {
     show() {
-      try { seen ||= storage().getItem(key) === "seen"; } catch { /* Optional storage. */ }
-      if (seen || dialog.open) return;
-      clear();
+      try { seen ||= storage().getItem(key) === "seen"; } catch { /* Memory fallback. */ }
+      if (seen || dialog.open) return false;
+      active = true; docking = false;
+      position.append(banner);
+      dialog.dataset.phase = "dark";
       const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      stage(reduced ? 2 : 0);
+      dialog.dataset.reduced = String(reduced);
+      enter.hidden = !reduced;
+      sound.hidden = !voiceAvailable || reduced;
       dialog.showModal();
       dialog.querySelector(".intro-skip").focus();
-      if (!reduced) {
-        timers.push(setTimeout(() => stage(1), 4000));
-        timers.push(setTimeout(() => stage(2), 8000));
+      if (reduced) dialog.dataset.phase = "hold";
+      else {
+        later(() => { dialog.dataset.phase = "unfurl"; }, 650);
+        later(greeting, 3750);
       }
+      return true;
+    },
+    reset() {
+      active = false; clear(); stopVoice();
+      position.append(banner);
+      if (dock) dock.hidden = true;
+      if (dialog.open) dialog.close();
     },
   };
 }

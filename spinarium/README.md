@@ -13,15 +13,22 @@ dashboard, grants no Veilings, makes no backend requests, and has no administrat
 or claim authority. Sign-out and reload clear the in-memory preview session.
 Signup and recovery are unavailable in this mode.
 
-The first preview login opens a skippable three-scene cinematic introduction.
-Its fork-ended curved welcome ribbon unfurls from the center before the lettering
-appears. An optional Play welcome voice control speaks “Welcome to your Spinarium”
-using the browser's installed voice; no audio auto-plays or external speech service
-is used. A recorded voice asset can replace this provisional playback later.
-Reduced-motion visitors see its final scene immediately. Completion or skipping
-stores only a device-local `spinarium.preview.introduction.v1` preference; no
-account, credentials, or ownership is stored. Later live accounts should use a
-server-side onboarding marker instead. Clearing browser site data replays it.
+The first preview login fades into a black screen. A curved scroll unfurls at
+center, “Welcome to your Spinarium” fades in alongside browser-generated speech,
+then the scroll pauses, shrinks and moves to the top as the dashboard appears.
+The docked ribbon remains above the collection. Skip/Escape stop playback and
+open the dashboard immediately. Reduced-motion visitors get a still welcome
+and an Enter Spinarium button without automatic voice or timed movement.
+
+Voice is provisional browser speech (when supported/permitted), not recorded
+character audio. Mute stops it; unavailable or blocked speech never prevents
+entry. All timers and speech clear on skip, logout, or dialog closure.
+Completion uses only `spinarium.preview.introduction.v2`, a browser-local seen
+preference. The revised sequence gets its own version so earlier preview visitors
+can see it once. Real per-account onboarding remains a future backend feature.
+
+Run `node scripts/verify-spinarium-intro.mjs` for deterministic timeline,
+interruption, focus restoration, preference, and reduced-motion checks.
 
 To connect real accounts later, set `previewEnabled: false` and configure the
 dedicated Supabase project using the account setup guide. The provider adapters

@@ -22,7 +22,9 @@ const adapters = preview ? createPreviewAccess() : null;
 const auth = adapters?.auth ?? createAuthClient(spinariumConfig);
 const service = adapters?.service ?? createSpinariumService(spinariumConfig, auth);
 const $ = (selector) => document.querySelector(selector);
-const firstLoginIntro = createFirstLoginIntro($("#first-login-intro"));
+const firstLoginIntro = createFirstLoginIntro($("#first-login-intro"), {
+  dock: $("#welcome-ribbon-dock"), focusTarget: $("#main-content"),
+});
 const mobile = matchMedia("(max-width: 640px)");
 const state = {
   session: null,
@@ -130,6 +132,7 @@ function setAuthMode(mode) {
   clearPasswords();
 }
 function clearPrivateViews() {
+  firstLoginIntro.reset();
   state.snapshot = null;
   state.selectedId = null;
   state.admin = false;
@@ -244,13 +247,13 @@ async function loadCollection() {
     $("#admin-nav").hidden = !state.admin;
     $("#loading-status").hidden = true;
     route();
-    if (preview) firstLoginIntro.show();
+
   } catch {
     if (epoch === state.epoch && auth.getSession()) showCollectionError();
   }
 }
-function handleSession(session) {
-  state.epoch++;
+async function handleSession(session) {
+  const epoch = ++state.epoch;
   state.session = session;
   clearPrivateViews();
   if (!session) {
@@ -265,6 +268,11 @@ function handleSession(session) {
     setAuthMode("update-password");
     history.replaceState(null, "", "#update-password");
     return;
+  }
+  if (preview && firstLoginIntro.show()) {
+    // Keep login beneath the fade-to-black before revealing the layout.
+    await new Promise(resolve => setTimeout(resolve, 400));
+    if (epoch !== state.epoch || !auth.getSession()) return;
   }
   document.body.classList.remove("auth-gated");
   $("#auth-view").hidden = true;

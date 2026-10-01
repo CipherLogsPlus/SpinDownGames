@@ -131,6 +131,7 @@
         </div>
       </aside>
       <main id="main-content" tabindex="-1">
+        <div id="welcome-ribbon-dock" class="welcome-ribbon-dock" hidden></div>
         <section class="hero" aria-labelledby="spinarium-title">
           <div class="hero-copy">
             <p class="eyebrow">The world beyond the artifact</p>
@@ -515,7 +516,11 @@
       <div id="full-detail-content"></div>
     </dialog>
     <dialog id="first-login-intro" class="first-login-intro" aria-labelledby="intro-heading" aria-describedby="intro-description">
+      <div class="intro-black-backdrop" aria-hidden="true"></div>
+      <h2 id="intro-heading" class="sr-only">Welcome to your Spinarium</h2>
+      <p id="intro-description" class="sr-only">A welcome scroll opens, then moves above your collection.</p>
       <button type="button" class="intro-skip">Skip introduction</button>
+      <div class="intro-banner-position">
       <svg class="intro-banner" viewBox="0 0 800 185" role="img" aria-labelledby="intro-banner-title">
         <title id="intro-banner-title">Welcome to your Spinarium</title>
         <defs>
@@ -531,18 +536,11 @@
         <path class="intro-roll intro-roll-right" d="M403 39 Q422 69 403 101 L397 101 Q416 69 397 39 Z" aria-hidden="true" />
         <text><textPath href="#intro-ribbon-text" startOffset="50%" text-anchor="middle">Welcome to your Spinarium</textPath></text>
       </svg>
-      <div class="intro-frame" aria-hidden="true"></div>
-      <div class="intro-copy" aria-live="polite" aria-atomic="true">
-        <p class="intro-eyebrow"></p>
-        <h2 id="intro-heading" class="intro-title"></h2>
-        <p id="intro-description" class="intro-subtitle"></p>
       </div>
-      <div class="intro-bottom">
-        <span class="intro-progress" aria-label="Introduction scene"></span>
-        <button type="button" class="intro-voice outlined-button">Play welcome voice</button>
+      <div class="intro-controls">
+        <button type="button" class="intro-sound">Mute voice</button>
         <span class="intro-voice-status sr-only" role="status"></span>
         <button type="button" class="outlined-button intro-enter" hidden>Enter Spinarium</button>
-        <span class="intro-brand">SpinDownGames<sup>™</sup></span>
       </div>
     </dialog>
   </body>
