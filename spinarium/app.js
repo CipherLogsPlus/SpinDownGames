@@ -1,6 +1,7 @@
 import { spinariumConfig } from "./config.js";
 import { createAuthClient, AuthError } from "./auth/supabase-auth.js";
 import { createSpinariumService } from "./data/supabase-service.js";
+import { createPreviewAccess } from "./data/preview-service.js";
 import { getVeilingDetail, queryCollection } from "./domain/collection.js";
 import { hydrateIcons } from "./components/icons.js";
 import {
@@ -13,9 +14,11 @@ import {
   renderFullDetail,
 } from "./components/views.js";
 
-// Composition root. The live entry never imports the demonstration adapter.
-const auth = createAuthClient(spinariumConfig);
-const service = createSpinariumService(spinariumConfig, auth);
+// Preview is explicitly selected; provider failures never fall back to it.
+const preview = spinariumConfig.previewEnabled === true;
+const adapters = preview ? createPreviewAccess() : null;
+const auth = adapters?.auth ?? createAuthClient(spinariumConfig);
+const service = adapters?.service ?? createSpinariumService(spinariumConfig, auth);
 const $ = (selector) => document.querySelector(selector);
 const mobile = matchMedia("(max-width: 640px)");
 const state = {
@@ -53,7 +56,7 @@ function navigationSize() {
   closeNavigation();
 }
 function setAuthMode(mode) {
-  authMode = authRoutes.has(mode) ? mode : "signin";
+  authMode = preview ? "signin" : authRoutes.has(mode) ? mode : "signin";
   if (authMode === "update-password" && state.session?.flow !== "recovery")
     authMode = "signin";
   const signup = authMode === "signup";
@@ -93,7 +96,21 @@ function setAuthMode(mode) {
   $("#auth-confirm-password").required = signup || recovery;
   $("#forgot-password").hidden = authMode !== "signin";
   $("#auth-fields").disabled = !auth.configured || state.authBusy;
-  $("#auth-availability").hidden = auth.configured;
+  $("#auth-availability").hidden = auth.configured && !preview;
+  if (preview) {
+    $("#auth-title").textContent = "Enter the Spinarium preview";
+    $("#auth-description").textContent = "Explore an empty collection preview. Real accounts are not connected yet.";
+    $("#auth-availability").replaceChildren(
+      el("strong", "", "Static preview"),
+      el("p", "", "Username: admin · Password: 1234. This preview contains no private data or real account access."),
+    );
+    $("#auth-email").type = "text";
+    $("label[for='auth-email']").textContent = "Username";
+    $("#auth-submit").textContent = "Open preview";
+    $("#signup-tab").hidden = true;
+    $("#forgot-password").hidden = true;
+    $("#guest-tools a[href='#signup']").hidden = true;
+  }
   for (const [selector, active] of [
     ["#signin-tab", authMode === "signin"],
     ["#signup-tab", signup],
@@ -253,6 +270,7 @@ function handleSession(session) {
   $("#collection-notice").hidden = false;
   $("#claim-open").hidden = false;
   $("#profile-name").textContent = session.user.email;
+  if (preview) $("#collection-notice").textContent = "Static preview · No real account, ownership, or backend actions are connected.";
   navigationSize();
   if (authRoutes.has(location.hash.slice(1)) || !location.hash)
     history.replaceState(null, "", "#dashboard");
@@ -364,7 +382,9 @@ $("#auth-form").addEventListener("submit", async (event) => {
     } else await auth.signIn({ email, password });
   } catch (error) {
     feedback(
-      error instanceof AuthError
+      preview
+        ? "Preview login failed. Use admin and 1234."
+        : error instanceof AuthError
         ? error.message
         : "The account service could not complete this request.",
       true,
@@ -563,3 +583,4 @@ try {
     true,
   );
 }
+

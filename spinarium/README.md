@@ -1,5 +1,19 @@
 # Spinarium
 
+## Current static preview
+
+The owner requested a temporary static login: username `admin`, password `1234`.
+`config.js` explicitly selects `previewEnabled: true`. This is a public UI preview,
+not authentication or protection of private information. It opens an empty
+dashboard, grants no Veilings, makes no backend requests, and has no administrator
+or claim authority. Sign-out and reload clear the in-memory preview session.
+Signup and recovery are unavailable in this mode.
+
+To connect real accounts later, set `previewEnabled: false` and configure the
+dedicated Supabase project using the account setup guide. The provider adapters
+remain intact; provider failures never automatically fall back to preview access.
+The historical account-activation notes below describe that provider mode.
+
 Spinarium lives at `/spinarium/` inside the static SpinDownGames™ site. The original website retains its existing content, assets, scripts and GitHub Pages deployment. Its **View Spinarium** button is the entry point.
 
 The entry now requires sign-in or account creation. No demonstration characters, silhouettes, character numbers, invented users or ownership grants appear. Empty slots are plain black decorative cards, not catalog records. A new authenticated collector starts with zero ownership records.

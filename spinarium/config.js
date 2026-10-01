@@ -5,6 +5,8 @@
  * must never be put here, in GitHub Pages, or anywhere else in browser code.
  */
 export const spinariumConfig = Object.freeze({
+  // Temporary UI preview. This is not authentication or access protection.
+  previewEnabled: true,
   supabaseUrl: "",
   supabasePublishableKey: "",
 });

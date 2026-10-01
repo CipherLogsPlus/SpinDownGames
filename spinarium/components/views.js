@@ -77,6 +77,7 @@ function panelHeading(title, href) {
 
 export function renderStats(snapshot) {
   const values = getDashboardStats(snapshot);
+  if (snapshot.mode === "preview") values.memberSince = "—";
   const fragment = document.createDocumentFragment();
   for (const [key, label] of [
     ["veilingsOwned", "Veilings Owned"],
@@ -578,7 +579,9 @@ export function renderRoute(route, snapshot, capabilities) {
       el(
         "p",
         "route-intro",
-        "Your account is managed by the secure sign-in service. Profile editing is not available yet.",
+        snapshot.mode === "preview"
+          ? "This is a static preview. Real accounts and profile editing are not connected yet."
+          : "Your account is managed by the secure sign-in service. Profile editing is not available yet.",
       ),
     );
     const grid = el("div", "route-grid");
@@ -591,7 +594,9 @@ export function renderRoute(route, snapshot, capabilities) {
       ],
       [
         "Privacy",
-        "Your collection is private. Public ownership visibility controls are not available yet.",
+        snapshot.mode === "preview"
+          ? "This preview contains no private account or collection data."
+          : "Your collection is private. Public ownership visibility controls are not available yet.",
       ],
       ["Motion", "Spinarium follows your device’s reduced-motion preference."],
     ]) {
