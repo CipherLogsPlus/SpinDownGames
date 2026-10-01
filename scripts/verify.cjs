@@ -56,6 +56,8 @@ const test = async (name, fn) => {
       const bad = await page.evaluate(() =>
         [...document.querySelectorAll("a")]
           .filter((a) => {
+            if (a.getAttribute("href") === "spinarium/")
+              return a.origin !== location.origin || a.target !== "";
             if (a.getAttribute("href").startsWith("#"))
               return !document.getElementById(a.hash.slice(1));
             if (["privacy.html", "terms.html"].includes(a.getAttribute("href")))

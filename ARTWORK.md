@@ -37,3 +37,7 @@ The generated fantasy hero was removed from the current site and social preview.
 Anton and DM Sans are self-hosted Google Fonts; their SIL Open Font Licenses are included in `assets/fonts/`. Anton was downloaded via the official Google Fonts stylesheet; DM Sans is the variable font from the official `google/fonts` repository.
 
 The small card, orbit, lightning, and die interface graphics are CSS/SVG. The favicon is a geometric die; the supplied logo remains the primary brand image.
+
+## Spinarium concept artwork
+
+The additive `/spinarium/` collection preview uses separate original concept illustrations, not the site's trading-card display images. See [assets/spinarium/README.md](assets/spinarium/README.md) for provenance, replaceable asset filenames, and non-canonical status. The supplied dashboard reference was used as a layout target and is not a webpage background. No original artwork files were removed or altered.
