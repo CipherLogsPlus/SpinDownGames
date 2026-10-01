@@ -28,6 +28,7 @@ function fixture({ reduced = false, brokenStorage = false } = {}) {
   const dialog = {
     open: false, dataset: {}, style: { setProperty() {} }, querySelector: node,
     addEventListener(event, fn) { listeners.set(event, fn); },
+    focus() {},
     showModal() { this.open = true; },
     close() { this.open = false; listeners.get('close')?.(); },
   };
@@ -38,7 +39,7 @@ function fixture({ reduced = false, brokenStorage = false } = {}) {
   };
   const dock = node('dock'); dock.hidden = true;
   const options = { storage, dock, focusTarget: { focus() { focused = true; } } };
-  return { dialog, nodes, dock, values, options, focused: () => focused, intro: createFirstLoginIntro(dialog, options) };
+  return { dialog, nodes, dock, values, options, listeners, focused: () => focused, intro: createFirstLoginIntro(dialog, options) };
 }
 try {
   const f = fixture(); f.intro.show();
@@ -52,15 +53,17 @@ try {
   assert.equal(f.dock.hidden, false); assert.ok(f.dock.child); assert.equal(f.focused(), true);
   assert.equal(tasks.size, 0);
   createFirstLoginIntro(f.dialog, f.options).show(); assert.equal(f.dialog.open, false);
-  const skipped = fixture({ brokenStorage: true }); skipped.intro.show();
-  skipped.nodes.get('.intro-skip').click(); assert.equal(skipped.dialog.open, false);
-  advance(15000); assert.equal(tasks.size, 0); skipped.intro.show(); assert.equal(skipped.dialog.open, false);
+  const fallback = fixture({ brokenStorage: true }); fallback.intro.show();
+  let prevented = false;
+  fallback.listeners.get('cancel')({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, true); assert.equal(fallback.dialog.open, true);
+  advance(15000); assert.equal(tasks.size, 0); assert.equal(fallback.dialog.open, false);
+  fallback.intro.show(); assert.equal(fallback.dialog.open, false);
   const logout = fixture(); logout.intro.show(); advance(650); logout.intro.reset();
   assert.equal(logout.dialog.open, false); assert.equal(tasks.size, 0); assert.equal(logout.values.size, 0);
   const reduced = fixture({ reduced: true }); reduced.intro.show();
-  assert.equal(reduced.dialog.dataset.phase, 'hold'); assert.equal(tasks.size, 0);
-  assert.equal(reduced.nodes.get('.intro-enter').hidden, false);
-  reduced.nodes.get('.intro-enter').click(); assert.equal(reduced.dialog.open, false);
+  assert.equal(reduced.dialog.dataset.phase, 'hold');
+  advance(1200); assert.equal(reduced.dialog.open, false); assert.equal(tasks.size, 0);
   let spoken = null, cancellations = 0;
   globalThis.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   globalThis.speechSynthesis = { speak(line) { spoken = line; }, cancel() { cancellations++; } };
@@ -73,7 +76,7 @@ try {
   advance(6500); assert.equal(blocked.dialog.dataset.phase, 'hold');
   advance(4500); assert.equal(blocked.dialog.open, false); assert.equal(tasks.size, 0);
   delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
-  console.log('PASS voice timing/fallback, cinematic timing, docking, focus, remembered entry, storage fallback, skip/logout cleanup, reduced motion');
+  console.log('PASS voice timing/fallback, cinematic timing, docking, focus, remembered entry, storage fallback, automatic completion/logout cleanup, reduced motion');
 } finally {
   globalThis.setTimeout = original.setTimeout; globalThis.clearTimeout = original.clearTimeout;
   globalThis.matchMedia = original.matchMedia;

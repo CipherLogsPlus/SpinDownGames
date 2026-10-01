@@ -2663,13 +2663,10 @@ p {
 .intro-roll { fill: #776e55; stroke: #c6b990; stroke-width: .6; opacity: 0; }
 .first-login-intro[data-phase="unfurl"] .intro-roll-left { animation: ribbon-roll-left 3.1s cubic-bezier(.2,.65,.25,1) both; }
 .first-login-intro[data-phase="unfurl"] .intro-roll-right { animation: ribbon-roll-right 3.1s cubic-bezier(.2,.65,.25,1) both; }
-.intro-skip { position: absolute; top: max(24px, env(safe-area-inset-top)); right: 5%; border: 0; padding: 12px; color: #b8c0c8; background: transparent; font: inherit; cursor: pointer; z-index: 2; }
 .intro-controls { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 16px; justify-content: center; }
 .intro-sound { border: 0; padding: 12px; color: #9fa8b1; background: transparent; font: inherit; }
-.intro-enter { min-height: 48px; }
 .first-login-intro button:focus-visible { outline: 2px solid #bce8f5; outline-offset: 4px; }
-.first-login-intro[data-phase="reveal"] .intro-controls,
-.first-login-intro[data-phase="reveal"] .intro-skip { opacity: 0; pointer-events: none; }
+.first-login-intro[data-phase="reveal"] .intro-controls { opacity: 0; pointer-events: none; }
 .welcome-ribbon-dock { width: min(640px, 94%); aspect-ratio: 800 / 185; margin: 16px auto; }
 .welcome-ribbon-dock .intro-roll { display: none; }
 @keyframes intro-black-in { from { opacity: 0; } to { opacity: 1; } }

@@ -4,7 +4,6 @@ export function createFirstLoginIntro(dialog, { storage = () => localStorage, do
   const phrase = "Welcome to your Spinarium";
   const position = dialog.querySelector(".intro-banner-position");
   const banner = dialog.querySelector(".intro-banner");
-  const enter = dialog.querySelector(".intro-enter");
   const sound = dialog.querySelector(".intro-sound");
   const status = dialog.querySelector(".intro-voice-status");
   const voiceAvailable = "speechSynthesis" in globalThis && "SpeechSynthesisUtterance" in globalThis;
@@ -68,9 +67,8 @@ export function createFirstLoginIntro(dialog, { storage = () => localStorage, do
     sound.setAttribute("aria-pressed", String(muted));
     if (muted) stopVoice();
   });
-  dialog.querySelector(".intro-skip").addEventListener("click", () => finish());
-  enter.addEventListener("click", () => finish());
-  dialog.addEventListener("cancel", event => { event.preventDefault(); finish(); });
+  // This one-time introduction completes itself; Escape does not bypass it.
+  dialog.addEventListener("cancel", event => event.preventDefault());
   dialog.addEventListener("close", () => { active = false; clear(); stopVoice(); });
   return {
     show() {
@@ -81,11 +79,13 @@ export function createFirstLoginIntro(dialog, { storage = () => localStorage, do
       dialog.dataset.phase = "dark";
       const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
       dialog.dataset.reduced = String(reduced);
-      enter.hidden = !reduced;
       sound.hidden = !voiceAvailable || reduced;
       dialog.showModal();
-      dialog.querySelector(".intro-skip").focus();
-      if (reduced) dialog.dataset.phase = "hold";
+      dialog.focus();
+      if (reduced) {
+        dialog.dataset.phase = "hold";
+        later(() => { onReveal?.(); finish(true); }, 1200);
+      }
       else {
         onPrepare?.();
         later(() => { dialog.dataset.phase = "unfurl"; }, 650);
