@@ -4,27 +4,31 @@ Spinarium is an additive, standalone area of the existing static SpinDownGames s
 
 ## Existing platform and milestone boundary
 
-The repository uses semantic HTML, local CSS, and browser JavaScript, deployed through GitHub Pages with a custom domain. It has no application authentication service or database. Existing brand assets, locally hosted fonts, the actual Trainer’s Bazaar announcement, and the site's links can be reused. Replacing this working platform with a framework is unnecessary for the first milestone.
+The repository uses semantic HTML, local CSS, and browser JavaScript, deployed through GitHub Pages with a custom domain. The original site had no authentication service or database. Existing brand assets, locally hosted fonts, the actual Trainer’s Bazaar announcement, and the site's links can be reused. Replacing this working platform with a framework is unnecessary.
 
-This milestone implements a responsive collection dashboard, selected Veiling details, filtering/search/sorting, supporting collection views, and an honest registration preview. The example collection is clearly labeled as demonstration data. Its character art, rarity assignments, editions, serials, ownership, achievement awards, and lore are illustrative. Concept lore is draft content, not canon. The featured Trainer’s Bazaar event comes from the existing site; editorial news previews are labeled as drafts.
+The first milestone supplied the dashboard and an isolated demonstration adapter. The account correction removes that adapter from the public application entirely: entry is gated by sign-in/sign-up, new collections start empty, and empty cards are solid black without character art, silhouettes, names or numbers. Historical example assets and fixtures remain preserved but are not live collection content.
 
-Authentication, verified claims, transfers, notifications, 3D assets, InvoHub automation, and gameplay are unavailable. The demo service has no mutation methods. Typing a code must not create an ownership record, show a successful claim, or grant an achievement.
+Supabase account/catalog adapters and a dedicated-project schema are now prepared. Hosted configuration remains empty until the actual project and policies are installed and verified; account forms fail closed while disconnected. The protected catalog editor is separate from ownership authority. Verified claims, transfers, notifications, 3D assets, InvoHub automation and gameplay remain unavailable. Typing a code must not create ownership, show a successful claim or grant an achievement.
 
 ## Code boundaries
 
-| Area | Responsibility |
-| --- | --- |
-| `spinarium/index.html` | Standalone page shell and semantic mount points. |
-| `spinarium/styles.css` | Spinarium-only visual language and responsive layout. |
-| `spinarium/app.js` and `spinarium/components/` | Composition, URL/view state, accessible reusable presentation and interactions. |
-| `spinarium/domain/types.js` | Versioned public read model and service contract, documented with JSDoc. |
-| `spinarium/domain/collection.js` | Pure collection queries and derived display statistics. |
-| `spinarium/data/demo-service.js` | Isolated, asynchronous, read-only demonstration adapter. |
-| `scripts/verify-spinarium-domain.mjs` | Dependency-free contract and domain verification. |
+| Area                                           | Responsibility                                                                                                   |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `spinarium/index.html`                         | Standalone page shell and semantic mount points.                                                                 |
+| `spinarium/styles.css`                         | Spinarium-only visual language and responsive layout.                                                            |
+| `spinarium/app.js` and `spinarium/components/` | Composition, URL/view state, accessible reusable presentation and interactions.                                  |
+| `spinarium/domain/types.js`                    | Versioned public read model and service contract, documented with JSDoc.                                         |
+| `spinarium/domain/collection.js`               | Pure collection queries and derived display statistics.                                                          |
+| `spinarium/auth/supabase-auth.js`              | Provider-verified account access, confirmation/recovery and memory-only sessions.                                |
+| `spinarium/data/supabase-service.js`           | Authenticated collection projection and authorized catalog editing.                                              |
+| `spinarium/config.js`                          | Public project URL/key; empty until backend activation.                                                          |
+| `supabase/spinarium-schema.sql`                | Dedicated-project identity/profile, catalog, ownership restrictions, private artwork and admin/audit foundation. |
+| `spinarium/data/demo-service.js`               | Historical read-only domain fixture; excluded from the public application.                                       |
+| `scripts/verify-spinarium-domain.mjs`          | Dependency-free contract and domain verification.                                                                |
 
-The composition root injects a service into the interface. Presentation components receive projected data and callbacks; they do not import the mock dataset or act as the ownership authority. To integrate a backend, implement `getDashboard({ signal })` and `getCapabilities()` in an HTTP adapter, validate its versioned response, and replace the adapter at the composition root. `mode: 'demo'` is explicit in this response. A live deployment must remove demo labeling only after it actually uses authoritative live data.
+The composition root uses the authenticated service. Presentation components receive projected data; they do not import the mock dataset or act as ownership authority. The HTTP adapter validates a versioned `mode: 'live'` response with the verified collector's own records. Missing schema, failed authorization or incompatible data produces an error; it never falls back to demo records or pretends the account loaded successfully.
 
-`queryCollection(snapshot, { search, filter, sort })` expresses collection intent independently of the DOM. In this milestone it queries a small local snapshot. At catalog scale, move pagination and queries to the service, retain the same filter vocabulary, and add cursor-based results. `getVeilingDetail()` derives a display projection; `getDashboardStats()` derives consistent demo totals from collection and ownership records.
+`queryCollection(snapshot, { search, filter, sort })` expresses collection intent independently of the DOM. At catalog scale, move pagination and queries to the service, retain the same vocabulary, and add cursor-based results. `getVeilingDetail()` derives display data; `getDashboardStats()` derives totals from actual ownership records, never decorative empty slots.
 
 ## Public data and visibility
 
@@ -32,28 +36,28 @@ Definitions, editions, variants, and artwork are separate concepts. Artwork has 
 
 Discovery is global; ownership is personal. A revealed character can be unowned. A collector can own multiple physical instances of the same Veiling. The “Veilings Owned” statistic counts distinct Veilings; physical instance counts are separate. “Discovered” shows all globally revealed characters, including owned ones. “Unowned” includes both revealed unowned characters and undiscovered slots.
 
-An undiscovered response contains only an opaque public ID, visible character number, discovery status, and explicitly approved silhouette assets. Names, lore, release details, color artwork, hidden asset URLs, and privileged edition metadata must be omitted **by the production server**. CSS silhouettes or frontend visibility checks do not protect secrets. The demo unknown records already contain null/empty public fields rather than concealed full definitions. Production must also prevent unrevealed assets from being retrieved through predictable public asset paths; publish them only on authorized reveal or use protected object storage.
+Current collector responses contain only owned Veilings. Empty and unowned slots display no metadata or silhouette. Any later global discovery projection must redact unrevealed names, numbers, lore, release details and artwork **on the server**. CSS visibility does not protect secrets. Private object storage restricts artwork access to authorized administrators or the current owner; short-lived signed URLs remain bearer capabilities until expiration.
 
 Private serials, claim dates, owned card instances, and private discoverer identities require authentication and object-level authorization. A public catalog response should not contain another collector's private records. The first discoverer can be shown only according to their privacy settings; internal provenance is retained independently.
 
 ## Proposed authoritative storage
 
-These are backend design boundaries, not a claim that a database has been deployed.
+These are long-term backend boundaries. The prepared catalog/profile/ownership schema is a narrower initial implementation, not a claim that a hosted database or the complete roadmap has been deployed. Edition/rarity editor labels are provisional catalog metadata; production management must introduce normalized edition/variant/batch relations through later migrations. See the accounts and admin guides for actual activation requirements.
 
-| Entity | Key relationship or invariant |
-| --- | --- |
-| User / UserProfile | Authentication identity and public/privacy settings are separate. |
-| Veiling / VeilingLore / VeilingArtwork | Stable character definition with versioned content and multiple assets. |
-| Series / Edition / Variant / Rarity | Edition belongs to a Veiling; variant belongs to an edition; rarity is configurable data. |
-| ProductionBatch | Belongs to an edition/variant and records production/audit status. |
-| PhysicalCard | Belongs to one batch; globally unique physical serial; serial is not a claim secret. |
-| ClaimCredential | Exactly one physical card; unique secure digest, issuance, revocation, and redemption state. |
-| Ownership | Current ownership projection; supports physical cards and authorized digital grants. |
-| OwnershipEvent / OwnershipTransfer | Immutable internal provenance and atomic transfer lifecycle. |
-| Discovery | One global first discovery per Veiling, independent of ownership. |
-| Collection / Achievement / UserAchievement | Data-driven definitions and server-awarded, idempotent earned records. |
-| Event / News | Editorial publication state; drafts are not release announcements. |
-| ClaimAttempt / SecurityEvent / AdministrativeAuditEvent | Protected, minimal, policy-retained abuse and administrative records. |
+| Entity                                                  | Key relationship or invariant                                                                |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| User / UserProfile                                      | Authentication identity and public/privacy settings are separate.                            |
+| Veiling / VeilingLore / VeilingArtwork                  | Stable character definition with versioned content and multiple assets.                      |
+| Series / Edition / Variant / Rarity                     | Edition belongs to a Veiling; variant belongs to an edition; rarity is configurable data.    |
+| ProductionBatch                                         | Belongs to an edition/variant and records production/audit status.                           |
+| PhysicalCard                                            | Belongs to one batch; globally unique physical serial; serial is not a claim secret.         |
+| ClaimCredential                                         | Exactly one physical card; unique secure digest, issuance, revocation, and redemption state. |
+| Ownership                                               | Current ownership projection; supports physical cards and authorized digital grants.         |
+| OwnershipEvent / OwnershipTransfer                      | Immutable internal provenance and atomic transfer lifecycle.                                 |
+| Discovery                                               | One global first discovery per Veiling, independent of ownership.                            |
+| Collection / Achievement / UserAchievement              | Data-driven definitions and server-awarded, idempotent earned records.                       |
+| Event / News                                            | Editorial publication state; drafts are not release announcements.                           |
+| ClaimAttempt / SecurityEvent / AdministrativeAuditEvent | Protected, minimal, policy-retained abuse and administrative records.                        |
 
 A physical ownership references a physical card. A future server-granted digital item references an authorized grant and may have no physical card; this is represented by nullable `physicalCardId` and an explicit acquisition source in the read contract. Do not invent a serial or fake claim for a digital grant. This supports future product options without implementing Warpling or any selection system.
 
@@ -91,4 +95,4 @@ Future transfers use a short-lived server-generated transfer credential/session.
 
 Run the dependency-free domain checks with `node scripts/verify-spinarium-domain.mjs`. Browser checks should additionally cover original site preservation, direct page navigation, search/filter/sort, selected details, unavailable claim submission, keyboard/focus/drawer/dialog behavior, responsive layouts, reduced motion, and console/network errors.
 
-This milestone deliberately has no trusted backend. Before a live release of verified collection functionality, select an identity provider, deploy the public/internal service boundaries, implement database migrations and transactional constraints, agree on official character assets/lore/rarity/publication policy, conduct threat review, configure security monitoring, and validate claim/transfer concurrency. The standalone collection dashboard remains useful while this backend work proceeds.
+Before activating accounts, install and verify the dedicated Supabase policies, configure confirmation/recovery delivery and provider limits, seed the owner's admin allowlist entry, and verify real collector/admin isolation. The inspected InvoHub migrations contain a fail-open administrator check; do not enable public signup against that internal database. The broader claim/transfer roadmap additionally needs transactional services, official content, security monitoring and concurrency validation. See [accounts](SPINARIUM-ACCOUNTS.md) and [administration](SPINARIUM-ADMIN.md).

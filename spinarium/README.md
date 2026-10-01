@@ -1,43 +1,47 @@
-# Spinarium first milestone
+# Spinarium
 
-Spinarium lives at `/spinarium/` inside the existing static SpinDownGames™ site. The original site has one additive homepage link; it retains its existing design, content, scripts, assets, policies, and GitHub Pages configuration.
+Spinarium lives at `/spinarium/` inside the static SpinDownGames™ site. The original website retains its existing content, assets, scripts and GitHub Pages deployment. Its **View Spinarium** button is the entry point.
 
-No build step or runtime dependency is required. Serve the repository root:
+The entry now requires sign-in or account creation. No demonstration characters, silhouettes, character numbers, invented users or ownership grants appear. Empty slots are plain black decorative cards, not catalog records. A new authenticated collector starts with zero ownership records.
+
+**Account activation is pending.** `config.js` contains no project URL or public key, so the account forms are visibly unavailable. The interface cannot create an account until a dedicated Supabase project, its database/storage policies, email confirmation and public configuration have been installed and verified. See [account setup](../docs/SPINARIUM-ACCOUNTS.md) and [admin setup](../docs/SPINARIUM-ADMIN.md).
+
+## Run locally
+
+No build step or browser dependency is required:
 
 ```sh
 python3 -m http.server 8000 --bind 127.0.0.1
 ```
 
-Open `http://127.0.0.1:8000/spinarium/`. Hash routes work directly on GitHub Pages, including `/spinarium/#collection`, `#achievements`, `#discoveries`, `#collections`, `#events`, `#news`, `#transfers`, and `#settings`. Collection selection updates the detail panel; mobile revealed-card selection opens a native accessible detail dialog.
+Open `http://127.0.0.1:8000/spinarium/`. Hash routes include `#signin`, `#signup`, `#reset`, `#dashboard`, `#collection`, `#achievements`, `#discoveries` and `#admin`. Collection and administrator routes require verified identity; the admin route also requires backend authorization.
 
 ## Boundaries
 
-- `index.html`: semantic page shell, navigation, forms, dialogs, and a JavaScript-disabled explanation.
-- `styles.css`: Spinarium-only responsive design, focus and reduced-motion rules.
-- `app.js`: service selection, UI state, routing and interaction orchestration.
-- `components/`: reusable safe DOM rendering and trusted icons.
-- `domain/`: collection queries, view projections, and documented data types.
-- `data/demo-service.js`: isolated, read-only, structured sample API data. Components do not import it. Replace the adapter in `app.js` when an authenticated backend is ready.
-- `../assets/spinarium/`: replaceable original concept artwork, with provenance and non-canonical status documented beside it.
-- `../docs/SPINARIUM-ARCHITECTURE.md`: backend boundary, domain relationships, identity and claim-security requirements.
+- `index.html`, `styles.css`: accessible page shell and Spinarium-only responsive design.
+- `app.js`: authentication, routing, view state and interaction composition.
+- `auth/supabase-auth.js`: Supabase REST authentication, confirmation, recovery and memory-only sessions. Reload requires signing in again.
+- `config.js`: public project configuration only; secret/service-role keys are prohibited.
+- `data/supabase-service.js`: authenticated collection reads and protected catalog editing. Missing or invalid backend responses fail visibly rather than substituting a demo collection.
+- `components/`, `domain/`: reusable safe DOM rendering, collection queries and API projections.
+- `data/demo-service.js`: isolated historical fixture used by domain verification; never imported by the public application.
+- `../supabase/spinarium-schema.sql`: dedicated-project profiles, catalog, ownership read restrictions, private artwork, administrator allowlist and audit foundation. This file does not mean a hosted database has been installed.
+- `../docs/SPINARIUM-ARCHITECTURE.md`: broader service and domain direction.
 
-The preview shows ten sample Veilings: five owned, six globally revealed, four undiscovered. Stats derive from those records. Artwork, lore, sample serials, rarity assignments and ownership dates are not product commitments. Undiscovered records contain no concealed names, lore, or color-art URLs. The events panel links to the existing confirmed Trainer’s Bazaar event.
+The protected Admin Studio can add/edit Veiling names, descriptions, publication status, optional character numbers, edition/rarity labels and artwork once the backend is connected. Catalog publication never grants ownership. Admin rights are seeded through protected server-side SQL; no signup, browser flag or user metadata can grant them. Internal InvoHub remains separate.
 
-Accounts, claiming, transfers, notifications and 3D viewing are unavailable. Registration explains the eventual flow; its code field and submission button are disabled. There are no claim requests, claim secrets, ownership writes, credential storage, or simulated successful registrations. The preview creates no account or persistent collection data.
+Physical-card registration, transfers, notifications, 3D viewing, production automation and game systems remain unavailable. Registration input/submission stays disabled; there is no simulated claim success or browser ownership write.
 
-Replacing the read adapter also requires validated live responses, authenticated profile/preview UI, and explicitly implemented action handlers. A server capability flag alone must never enable an unfinished claim, transfer, notification, or 3D action. Registration stays disabled until the secure backend and its full client flow exist.
-
-Desktop and mobile review images are in [docs/screenshots](../docs/screenshots/).
-
-## Verification
+## Verify
 
 ```sh
 node scripts/verify-spinarium-domain.mjs
-npm install --prefix /tmp/spindown-qa --no-audit --no-fund playwright axe-core
-node /tmp/spindown-qa/node_modules/playwright/cli.js install chromium
-NODE_PATH=/tmp/spindown-qa/node_modules node scripts/verify-spinarium.cjs
+node scripts/verify-spinarium-auth.mjs
+npm install --prefix /tmp/spinarium-db-check --no-audit --no-fund @electric-sql/pglite@0.5.8
+SPINARIUM_PGLITE_MODULE=/tmp/spinarium-db-check/node_modules/@electric-sql/pglite/dist/index.js node scripts/verify-spinarium-backend.mjs
+NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify-spinarium.cjs
 ```
 
-Use `BROWSER_PATH` for an existing Chromium executable; `BASE_URL` and `SCREENSHOT_DIR` select the served site and optional screenshots. Browser verification covers source preservation, search/filter/sort, selection, dialogs, hash routes, disabled registration, mobile navigation, responsive layout, self-hosted assets and automated accessibility checks. Automated checks do not establish complete accessibility conformance.
+Browser verification requires a served repository root and Playwright/axe-core installed outside the repository. `BASE_URL`, `BROWSER_PATH` and `SCREENSHOT_DIR` select the site, browser and optional screenshots. Mock provider/database responses exist only in the test harness. Hosted identity, email delivery and RLS settings require separate real-project validation before activation.
 
-GitHub Pages currently deploys the repository root from `main`. Review this feature branch before merging; a merge to `main` publishes it. A secure backend and updated practices/policies are required before enabling collector accounts or registrations.
+GitHub Pages deploys the repository root from `main`. A merge publishes static UI changes; it cannot install Supabase schema or activate account infrastructure.
