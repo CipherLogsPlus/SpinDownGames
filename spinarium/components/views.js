@@ -372,6 +372,7 @@ export function renderFooter(snapshot) {
 }
 
 const titles = {
+  upcoming: "Upcoming Releases",
   achievements: "Achievements",
   discoveries: "Discovery Log",
   transfers: "Ownership Transfers",
@@ -387,7 +388,9 @@ export function renderRoute(route, snapshot, capabilities) {
   title.id = "route-title";
   title.tabIndex = -1;
   fragment.append(el("p", "eyebrow", "Your Spinarium"), title);
-  if (route === "achievements") {
+  if (route === "upcoming") {
+    fragment.append(el("p", "route-intro", "No upcoming releases to show yet."));
+  } else if (route === "achievements") {
     fragment.append(
       el(
         "p",

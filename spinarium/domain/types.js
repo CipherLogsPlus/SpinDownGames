@@ -6,7 +6,7 @@
  * asset URLs must be removed by the production server before this projection
  * reaches the browser. Claim credentials never belong in this model.
  *
- * @typedef {'demo'|'live'} DataMode
+ * @typedef {'demo'|'preview'|'live'} DataMode
  * @typedef {'owned'|'discovered'|'undiscovered'} CollectionState
  * @typedef {'all'|'owned'|'discovered'|'unowned'|'undiscovered'} CollectionFilter
  * @typedef {'number'|'name'|'rarity'|'release'} CollectionSort

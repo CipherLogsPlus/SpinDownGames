@@ -4,6 +4,8 @@ import { createSpinariumService } from "./data/supabase-service.js";
 import { createPreviewAccess } from "./data/preview-service.js";
 import { createFirstLoginIntro } from "./components/first-login-intro.js";
 import { createDashboardReveal } from "./components/dashboard-reveal.js";
+import { renderHomeHub } from "./components/home-hub.js";
+import { parseRoute } from "./domain/routing.js";
 import { getVeilingDetail, queryCollection } from "./domain/collection.js";
 import { hydrateIcons } from "./components/icons.js";
 import {
@@ -56,12 +58,14 @@ function clearPasswords() {
 }
 function closeNavigation(restore = false) {
   $("#sidebar-nav").classList.remove("is-open");
+  $("#sidebar-nav").inert = true;
+  $("#sidebar-nav").setAttribute("aria-hidden", "true");
   $("#navigation-toggle").setAttribute("aria-expanded", "false");
   if (restore) $("#navigation-toggle").focus();
 }
 function navigationSize() {
   $("#navigation-toggle").hidden =
-    !state.session || state.session.flow === "recovery" || !mobile.matches;
+    !state.session || state.session.flow === "recovery";
   closeNavigation();
 }
 function setAuthMode(mode) {
@@ -152,6 +156,7 @@ function clearPrivateViews() {
     "collection-grid",
     "detail-panel",
     "dashboard-footer",
+    "hub-view",
     "route-content",
     "full-detail-content",
   ])
@@ -167,7 +172,9 @@ function signedOutView() {
     "account-tools",
     "sidebar-nav",
     "dashboard-view",
+    "hub-view",
     "route-view",
+    "explore-tabs",
     "admin-view",
     "collection-notice",
     "claim-open",
@@ -184,7 +191,10 @@ function selectedDetail() {
     : null;
 }
 function updateSelection() {
-  $("#detail-panel").replaceChildren(renderDetail(selectedDetail()));
+  const detail = selectedDetail();
+  $("#detail-panel").hidden = !detail;
+  $(".dashboard-layout").classList.toggle("has-selection", Boolean(detail));
+  $("#detail-panel").replaceChildren(renderDetail(detail));
   document
     .querySelectorAll("[data-card-id]")
     .forEach((card) =>
@@ -196,20 +206,17 @@ function updateSelection() {
 }
 function updateCollection() {
   const entries = queryCollection(state.snapshot, state.query);
+  if (!entries.some(entry => entry.id === state.selectedId)) state.selectedId = null;
   $("#collection-grid").replaceChildren(
     renderCollection(entries, state.selectedId),
   );
   $("#collection-status").textContent = entries.length
     ? entries.length + " Veilings in this view"
-    : "Your collection is empty. No Veilings have been added.";
-  $("#collection-filter")
-    .querySelectorAll("button")
-    .forEach((button) =>
-      button.setAttribute(
-        "aria-pressed",
-        String(button.dataset.filter === state.query.filter),
-      ),
-    );
+    : state.query.filter === "owned"
+      ? "Your collection is empty. No Veilings have been added."
+      : "No Veilings to show in this view yet.";
+  $("#collection-filter").value = state.query.filter;
+  updateSelection();
 }
 function showCollectionError() {
   $("#dashboard-view").hidden = true;
@@ -243,9 +250,10 @@ async function loadCollection() {
     state.snapshot = snapshot;
     state.admin = admin === true;
     state.capabilities = service.getCapabilities();
-    state.selectedId = snapshot.veilings[0]?.id ?? null;
+    state.selectedId = null;
     $("#stats").replaceChildren(renderStats(snapshot));
     $("#dashboard-footer").replaceChildren(renderFooter(snapshot));
+    $("#hub-view").replaceChildren(renderHomeHub(snapshot));
     updateCollection();
     updateSelection();
     $("#admin-nav").hidden = !state.admin;
@@ -293,8 +301,8 @@ async function handleSession(session) {
   loadCollection();
 }
 function route() {
-  const requested =
-    location.hash.slice(1) || (state.session ? "dashboard" : "signin");
+  const parsed = parseRoute(location.hash, Boolean(state.session));
+  const requested = parsed.name;
   if (!state.session || state.session.flow === "recovery") {
     signedOutView();
     setAuthMode(
@@ -309,14 +317,30 @@ function route() {
     requested === "main-content" || authRoutes.has(requested)
       ? "dashboard"
       : requested;
-  $("#dashboard-view").hidden = !(
-    name === "dashboard" || name === "collection"
-  );
+  const collectionPage = name === "collection" || name === "explore";
+  document.body.classList.toggle("hub-route", name === "dashboard");
+  $(".hero").hidden = name !== "dashboard";
+  $("#hub-view").hidden = name !== "dashboard";
+  $("#dashboard-view").hidden = !collectionPage;
+  $("#collection-notice").hidden = name !== "dashboard";
+  $("#welcome-ribbon-dock").hidden = name !== "dashboard" || !$("#welcome-ribbon-dock").firstChild;
+  $("#explore-tabs").hidden = !(name === "explore" || name === "upcoming");
+  $("#claim-open").hidden = name !== "collection";
+  for (const link of $("#explore-tabs").querySelectorAll("a")) {
+    const target = parseRoute(link.hash, true);
+    if (target.name === name && (name === "upcoming" || target.filter === parsed.filter)) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  if (collectionPage) {
+    state.query.filter = parsed.filter;
+    $("#collection-page-title").textContent = name === "explore" ? "Explore Veilings" : "My Collection";
+    updateCollection();
+  }
   $("#route-view").hidden =
-    name === "dashboard" || name === "collection" || name === "admin";
+    name === "dashboard" || collectionPage || name === "admin";
   $("#admin-view").hidden = name !== "admin" || !state.admin;
   document.querySelectorAll("[data-nav]").forEach((link) => {
-    if (link.dataset.nav === name) link.setAttribute("aria-current", "page");
+    if (link.dataset.nav === name || (link.dataset.nav === "explore" && name === "upcoming")) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
   if (name === "admin") {
@@ -336,7 +360,7 @@ function route() {
         ),
       );
     }
-  } else if (name !== "dashboard" && name !== "collection")
+  } else if (name !== "dashboard" && !collectionPage)
     $("#route-content").replaceChildren(
       renderRoute(name, state.snapshot, state.capabilities),
     );
@@ -431,11 +455,10 @@ $("#collection-sort").addEventListener("change", (event) => {
   state.query.sort = event.currentTarget.value;
   updateCollection();
 });
-$("#collection-filter").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-filter]");
-  if (!button || !state.snapshot) return;
-  state.query.filter = button.dataset.filter;
-  updateCollection();
+$("#collection-filter").addEventListener("change", (event) => {
+  if (!state.snapshot) return;
+  const name = parseRoute(location.hash, true).name === "explore" ? "explore" : "collection";
+  location.hash = name + "?filter=" + event.currentTarget.value;
 });
 $("#catalog-search-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -466,7 +489,13 @@ $("#detail-panel").addEventListener("click", (event) => {
 $("#navigation-toggle").addEventListener("click", () => {
   const open = $("#navigation-toggle").getAttribute("aria-expanded") !== "true";
   $("#sidebar-nav").classList.toggle("is-open", open);
+  $("#sidebar-nav").inert = !open;
+  $("#sidebar-nav").setAttribute("aria-hidden", String(!open));
   $("#navigation-toggle").setAttribute("aria-expanded", String(open));
+  if (open) $("#sidebar-nav a").focus();
+});
+document.addEventListener("click", event => {
+  if (!event.target.closest("#sidebar-nav, #navigation-toggle") && $("#sidebar-nav").classList.contains("is-open")) closeNavigation();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeNavigation(true);
@@ -475,6 +504,7 @@ mobile.addEventListener("change", navigationSize);
 window.addEventListener("hashchange", () => {
   feedback("");
   route();
+  if (state.session && state.snapshot) $("#main-content").focus({ preventScroll: true });
 });
 
 function renderAdminList(rows) {

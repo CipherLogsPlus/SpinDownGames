@@ -1,6 +1,6 @@
 /** Presentation controller: row timing follows the actual responsive layout. */
 export function createDashboardReveal(root) {
-  const selectors = ".topbar, .sidebar, .hero, #collection-notice, #stats, .collection-panel, .collection-toolbar, #collection-grid > *, #collection-status, #detail-panel, #dashboard-footer, .page-footer";
+  const selectors = ".topbar, .hero, #hub-title, .hub-choice, #collection-notice, #stats, .collection-panel, .collection-toolbar, #collection-grid > *, #collection-status, #detail-panel, #dashboard-footer, .page-footer";
   let animations = [];
   function reset() {
     root.classList.remove("intro-staging");

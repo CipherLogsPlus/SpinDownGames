@@ -86,7 +86,7 @@
         hidden
       >
         <span data-icon="menu"></span
-        ><span class="sr-only">Open Spinarium navigation</span>
+        ><span>Menu</span>
       </button>
     </header>
     <div class="app-shell">
@@ -100,9 +100,10 @@
           <a href="#dashboard" data-nav="dashboard"
             ><span data-icon="cube"></span>My Spinarium</a
           >
-          <a href="#collection" data-nav="collection"
+          <a href="#collection?filter=owned" data-nav="collection"
             ><span data-icon="cards"></span>My Collection</a
           >
+          <a href="#explore?filter=discovered" data-nav="explore"><span data-icon="spark"></span>Explore Veilings</a>
           <a href="#achievements" data-nav="achievements"
             ><span data-icon="trophy"></span>Achievements</a
           >
@@ -142,9 +143,7 @@
           </div>
           <div class="hero-aside">
             <p>Some things<br />are meant<br />to be found.</p>
-            <button id="claim-open" type="button" class="claim-entry" hidden>
-              <span data-icon="key"></span>Register a card
-            </button>
+
           </div>
         </section>
         <section
@@ -254,7 +253,19 @@
         <div id="loading-status" role="status" hidden>
           Opening your collection…
         </div>
+        <section id="hub-view" class="home-hub" aria-labelledby="hub-title" hidden></section>
+        <nav id="explore-tabs" class="explore-tabs" aria-label="Explore Veilings" hidden>
+          <a href="#explore?filter=discovered">Revealed</a>
+          <a href="#explore?filter=unowned">Uncollected</a>
+          <a href="#upcoming">Upcoming</a>
+        </nav>
         <div id="dashboard-view" hidden>
+          <div class="collection-page-header">
+          <h2 id="collection-page-title" class="collection-page-title">My Collection</h2>
+            <button id="claim-open" type="button" class="claim-entry" hidden>
+              <span data-icon="key"></span>Register a card
+            </button>
+          </div>
           <div class="dashboard-layout">
             <section
               id="stats"
@@ -267,44 +278,15 @@
             >
               <h2 id="collection-title" class="sr-only">Veiling collection</h2>
               <div class="collection-toolbar">
-                <div
-                  id="collection-filter"
-                  class="filter-tabs"
-                  role="group"
-                  aria-label="Filter Veilings"
-                >
-                  <button type="button" data-filter="all" aria-pressed="true">
-                    All Veilings
-                  </button>
-                  <button
-                    type="button"
-                    data-filter="owned"
-                    aria-pressed="false"
-                  >
-                    Owned
-                  </button>
-                  <button
-                    type="button"
-                    data-filter="discovered"
-                    aria-pressed="false"
-                  >
-                    Discovered
-                  </button>
-                  <button
-                    type="button"
-                    data-filter="unowned"
-                    aria-pressed="false"
-                  >
-                    Unowned
-                  </button>
-                  <button
-                    type="button"
-                    data-filter="undiscovered"
-                    aria-pressed="false"
-                  >
-                    Undiscovered
-                  </button>
-                </div>
+                <label class="sort-box">Show
+                  <select id="collection-filter">
+                    <option value="all">All Veilings</option>
+                    <option value="owned">Owned</option>
+                    <option value="discovered">Discovered</option>
+                    <option value="unowned">Uncollected</option>
+                    <option value="undiscovered">Undiscovered</option>
+                  </select>
+                </label>
                 <div class="collection-tools">
                   <label class="search-box"
                     ><span data-icon="search"></span
@@ -478,7 +460,7 @@
       </div>
       <form id="claim-form">
         <label for="claim-code"
-          >Claim code <span>from the printed registration card</span></label
+          >One-time code <span>12 digits, from the printed registration card</span></label
         ><input
           id="claim-code"
           type="text"

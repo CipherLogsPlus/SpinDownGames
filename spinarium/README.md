@@ -2,6 +2,15 @@
 
 ## Current static preview
 
+The logged-in home is a two-choice hub: My Collection and Explore Veilings.
+The collection grid, filters, statistics, and selected details live on separate
+collection/explore routes. Revealed, Uncollected, and Upcoming are nested inside
+Explore; other destinations sit behind the Menu disclosure on every screen size.
+The collection filter uses one dropdown rather than five buttons. Details open
+only after a card selection. Registration stays in My Collection and remains
+unavailable until a secure claim backend exists. Upcoming has an honest empty
+state, with no invented releases. Administrator permissions remain unchanged.
+
 The entry screen intentionally stays minimal: “Spinarium login,” username,
 password, and Log in. Atmospheric artwork and collection details appear after
 entry, preserving the first-login cinematic surprise.
