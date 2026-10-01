@@ -9,6 +9,16 @@ dashboard, grants no Veilings, makes no backend requests, and has no administrat
 or claim authority. Sign-out and reload clear the in-memory preview session.
 Signup and recovery are unavailable in this mode.
 
+The first preview login opens a skippable three-scene cinematic introduction.
+Its fork-ended curved welcome ribbon unfurls from the center before the lettering
+appears. An optional Play welcome voice control speaks “Welcome to your Spinarium”
+using the browser's installed voice; no audio auto-plays or external speech service
+is used. A recorded voice asset can replace this provisional playback later.
+Reduced-motion visitors see its final scene immediately. Completion or skipping
+stores only a device-local `spinarium.preview.introduction.v1` preference; no
+account, credentials, or ownership is stored. Later live accounts should use a
+server-side onboarding marker instead. Clearing browser site data replays it.
+
 To connect real accounts later, set `previewEnabled: false` and configure the
 dedicated Supabase project using the account setup guide. The provider adapters
 remain intact; provider failures never automatically fall back to preview access.

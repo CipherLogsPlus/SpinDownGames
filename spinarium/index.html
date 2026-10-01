@@ -514,5 +514,36 @@
       </button>
       <div id="full-detail-content"></div>
     </dialog>
+    <dialog id="first-login-intro" class="first-login-intro" aria-labelledby="intro-heading" aria-describedby="intro-description">
+      <button type="button" class="intro-skip">Skip introduction</button>
+      <svg class="intro-banner" viewBox="0 0 800 185" role="img" aria-labelledby="intro-banner-title">
+        <title id="intro-banner-title">Welcome to your Spinarium</title>
+        <defs>
+          <linearGradient id="intro-ribbon-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#273949" />
+            <stop offset="1" stop-color="#0c1722" />
+          </linearGradient>
+          <path id="intro-ribbon-text" d="M140 119 Q400 33 660 119" />
+        </defs>
+        <path class="intro-ribbon" d="M85 90 Q400 -15 715 90 L690 120 L715 150 Q400 45 85 150 L110 120 Z" />
+        <path class="intro-ribbon-stitch" d="M111 92 Q400 1 689 92 M110 142 Q400 54 690 142" />
+        <path class="intro-roll intro-roll-left" d="M397 39 Q378 69 397 101 L403 101 Q384 69 403 39 Z" aria-hidden="true" />
+        <path class="intro-roll intro-roll-right" d="M403 39 Q422 69 403 101 L397 101 Q416 69 397 39 Z" aria-hidden="true" />
+        <text><textPath href="#intro-ribbon-text" startOffset="50%" text-anchor="middle">Welcome to your Spinarium</textPath></text>
+      </svg>
+      <div class="intro-frame" aria-hidden="true"></div>
+      <div class="intro-copy" aria-live="polite" aria-atomic="true">
+        <p class="intro-eyebrow"></p>
+        <h2 id="intro-heading" class="intro-title"></h2>
+        <p id="intro-description" class="intro-subtitle"></p>
+      </div>
+      <div class="intro-bottom">
+        <span class="intro-progress" aria-label="Introduction scene"></span>
+        <button type="button" class="intro-voice outlined-button">Play welcome voice</button>
+        <span class="intro-voice-status sr-only" role="status"></span>
+        <button type="button" class="outlined-button intro-enter" hidden>Enter Spinarium</button>
+        <span class="intro-brand">SpinDownGames<sup>™</sup></span>
+      </div>
+    </dialog>
   </body>
 </html>
