@@ -2702,3 +2702,24 @@ p {
   .first-login-intro[open] .intro-banner, .first-login-intro[open] .intro-banner text { animation: none; }
   .first-login-intro .intro-roll { display: none; }
 }
+/* A quiet entry keeps the first-login world reveal a surprise. */
+body.auth-gated .hero,
+body.auth-gated .topnav,
+body.auth-gated .guest-tools,
+body.auth-gated .auth-introduction,
+body.auth-gated .auth-panel > .eyebrow { display: none; }
+body.auth-gated { background: #0b0e12; }
+body.auth-gated .topbar { background: transparent; border-bottom: 0; box-shadow: none; }
+body.auth-gated .app-shell { display: block; }
+body.auth-gated #main-content { padding: 24px; background: transparent; }
+body.auth-gated .auth-field label { font-size: .875rem; }
+body.auth-gated .auth-field input, body.auth-gated .auth-submit { font-size: 1rem; }
+body.auth-gated .auth-layout { display: block; max-width: 380px; margin: clamp(36px, 12vh, 120px) auto 60px; padding: 0; }
+body.auth-gated .auth-panel { background: transparent; border: 0; box-shadow: none; padding: 0; }
+body.auth-gated .auth-panel h2 { font: 500 1.75rem/1.3 "DM Sans", sans-serif; letter-spacing: 0; margin-bottom: 28px; }
+body.auth-gated .auth-submit { background: #202731; color: #e7ebef; border: 1px solid #3e4855; box-shadow: none; }
+body.auth-gated .auth-submit:hover { background: #2b3541; }
+body.auth-gated.static-preview #auth-description,
+body.auth-gated.static-preview #auth-availability,
+body.auth-gated.static-preview .auth-tabs,
+body.auth-gated.static-preview .auth-policy { display: none; }

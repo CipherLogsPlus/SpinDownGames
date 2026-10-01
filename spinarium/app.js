@@ -17,6 +17,7 @@ import {
 
 // Preview is explicitly selected; provider failures never fall back to it.
 const preview = spinariumConfig.previewEnabled === true;
+document.body.classList.toggle("static-preview", preview);
 const adapters = preview ? createPreviewAccess() : null;
 const auth = adapters?.auth ?? createAuthClient(spinariumConfig);
 const service = adapters?.service ?? createSpinariumService(spinariumConfig, auth);
@@ -100,7 +101,7 @@ function setAuthMode(mode) {
   $("#auth-fields").disabled = !auth.configured || state.authBusy;
   $("#auth-availability").hidden = auth.configured && !preview;
   if (preview) {
-    $("#auth-title").textContent = "Enter the Spinarium preview";
+    $("#auth-title").textContent = "Spinarium login";
     $("#auth-description").textContent = "Explore an empty collection preview. Real accounts are not connected yet.";
     $("#auth-availability").replaceChildren(
       el("strong", "", "Static preview"),
@@ -108,7 +109,7 @@ function setAuthMode(mode) {
     );
     $("#auth-email").type = "text";
     $("label[for='auth-email']").textContent = "Username";
-    $("#auth-submit").textContent = "Open preview";
+    $("#auth-submit").textContent = "Log in";
     $("#signup-tab").hidden = true;
     $("#forgot-password").hidden = true;
     $("#guest-tools a[href='#signup']").hidden = true;

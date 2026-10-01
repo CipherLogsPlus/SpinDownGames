@@ -2,6 +2,10 @@
 
 ## Current static preview
 
+The entry screen intentionally stays minimal: “Spinarium login,” username,
+password, and Log in. Atmospheric artwork and collection details appear after
+entry, preserving the first-login cinematic surprise.
+
 The owner requested a temporary static login: username `admin`, password `1234`.
 `config.js` explicitly selects `previewEnabled: true`. This is a public UI preview,
 not authentication or protection of private information. It opens an empty
