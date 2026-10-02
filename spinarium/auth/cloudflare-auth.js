@@ -19,6 +19,7 @@ const MESSAGES = Object.freeze({
   INVALID_INPUT: "Check your account details and try again.",
   INVALID_CREDENTIALS: "Sign-in failed. Check your email and password.",
   ACCOUNT_UNAVAILABLE: "The account could not be created. Try signing in or use different account details.",
+  PASSWORD_RESET_UNAVAILABLE: "This reset link is invalid or has expired. Ask an administrator for a new link.",
   CANCELLED: "The account request was cancelled.",
 });
 
@@ -130,13 +131,14 @@ export function createAuthClient(config, {
     if (response.status === 400) {
       let code;
       try { code = (await response.json())?.code; } catch { /* Only safe machine codes are read. */ }
-      throw new AuthError(code === "ACCOUNT_UNAVAILABLE" ? "ACCOUNT_UNAVAILABLE" : "INVALID_INPUT");
+      throw new AuthError(["ACCOUNT_UNAVAILABLE", "PASSWORD_RESET_UNAVAILABLE"].includes(code) ? code : "INVALID_INPUT");
     }
     // Never expose a backend response body or submitted credential in errors.
     if (!response.ok) throw new AuthError("PROVIDER_ERROR");
     if (response.status === 204) return null;
     let data;
     try { data = await response.json(); } catch { throw new AuthError("PROVIDER_ERROR"); }
+    if (signal?.aborted) throw new AuthError("CANCELLED");
     if (!data || typeof data !== "object" || Array.isArray(data)) throw new AuthError("PROVIDER_ERROR");
     return data;
   }
@@ -191,6 +193,21 @@ export function createAuthClient(config, {
     if (!csrfToken) return;
     await request("/logout", { method: "POST", csrfToken });
   }
+  async function resetPassword({ token, password, signal } = {}) {
+    assertConfigured();
+    const version = operation;
+    if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token))
+      throw new AuthError("PASSWORD_RESET_UNAVAILABLE");
+    // The same password bounds apply to signup and reset. No email is needed.
+    credentials({ email: "reset@example.invalid", password, displayName: "Reset" }, true);
+    const result = await request("/password-reset", { method: "POST", body: { token, password }, signal });
+    if (result.passwordReset !== true) throw new AuthError("PROVIDER_ERROR");
+    // Expiry can clear an old session while the public request is pending.
+    // A newly authenticated identity belongs to a later operation instead.
+    if (version !== operation && current !== null) throw new AuthError("CANCELLED");
+    invalidateSession();
+    return { passwordReset: true };
+  }
   async function consumeAuthCallback(options = {}) {
     const callbackUrl = options.url || globalThis.location?.href;
     if (callbackUrl) {
@@ -211,7 +228,7 @@ export function createAuthClient(config, {
   return Object.freeze({
     configured: !connection.error,
     configurationError: connection.error ? MESSAGES[connection.error] : null,
-    signIn, signUp, signOut, getSession, consumeAuthCallback, invalidateSession,
+    signIn, signUp, signOut, resetPassword, getSession, consumeAuthCallback, invalidateSession,
     requestPasswordReset: unsupported, updatePassword: unsupported,
     async getCurrentUser(options) { return (await refreshSession(options))?.user || null; },
     getCsrfToken() { return getSession() ? current.csrfToken : null; },

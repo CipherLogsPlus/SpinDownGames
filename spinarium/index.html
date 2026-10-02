@@ -117,8 +117,10 @@
             ><span data-icon="settings"></span>Settings</a
           >
           <a href="#admin" data-nav="admin" id="admin-nav" hidden
-            ><span data-icon="settings"></span>Admin Studio</a
+            ><span data-icon="settings"></span>Veiling Studio</a
           >
+          <a href="#accounts" data-nav="accounts" id="admin-accounts-nav" hidden
+            ><span data-icon="settings"></span>Accounts</a>
           <button id="menu-sign-out" type="button" class="menu-sign-out">
             <span data-icon="arrow"></span>Sign out
           </button>
@@ -227,7 +229,7 @@
               >Forgot your password?</a
             >
             <p id="auth-recovery-note" class="form-feedback" hidden>
-              Password reset is not available yet. Save your password in a password manager.
+              Self-service email resets are unavailable. An administrator can provide a temporary reset link.
             </p>
             <p class="auth-policy">
               By creating an account, you agree to the
@@ -335,6 +337,28 @@
             <div id="dashboard-footer" class="dashboard-footer"></div>
           </div>
         </div>
+        <section id="password-reset-view" class="auth-layout" aria-labelledby="password-reset-title" hidden>
+          <div class="panel auth-panel">
+            <h2 id="password-reset-title">Reset your password</h2>
+            <p>Choose a new password. Temporary reset links work once and expire after 15 minutes.</p>
+            <form id="password-reset-form">
+              <fieldset id="password-reset-fields">
+                <div class="auth-field">
+                  <label for="password-reset-password">New password</label>
+                  <input id="password-reset-password" type="password" autocomplete="new-password" minlength="15" maxlength="256" aria-describedby="password-reset-hint" required />
+                  <p id="password-reset-hint" class="form-feedback">Use 15 to 128 characters.</p>
+                </div>
+                <div class="auth-field">
+                  <label for="password-reset-confirm">Confirm new password</label>
+                  <input id="password-reset-confirm" type="password" autocomplete="new-password" maxlength="256" required />
+                </div>
+                <button id="password-reset-submit" type="submit" class="outlined-button auth-submit">Save new password</button>
+              </fieldset>
+            </form>
+            <p id="password-reset-feedback" class="form-feedback" role="status" aria-live="polite"></p>
+            <a id="password-reset-signin" class="auth-text-link" href="#signin">Return to sign in</a>
+          </div>
+        </section>
         <section
           id="route-view"
           class="panel route-panel"
@@ -342,6 +366,19 @@
           hidden
         >
           <div id="route-content"></div>
+          <div id="signed-in-account" hidden>
+            <h3>Your account</h3>
+            <p>This account ID identifies your account when contacting SpinDownGames™.</p>
+            <div class="auth-field">
+              <label for="signed-in-account-id">Account ID</label>
+              <input id="signed-in-account-id" type="text" readonly autocomplete="off" spellcheck="false" />
+            </div>
+            <button id="copy-account-id" class="outlined-button" type="button">Copy account ID</button>
+            <p id="account-id-feedback" class="form-feedback" role="status"></p>
+          </div>
+        </section>
+        <section id="admin-accounts-view" class="panel route-panel" aria-labelledby="accounts-title" hidden>
+          <div id="admin-accounts-content"></div>
         </section>
         <section
           id="admin-view"

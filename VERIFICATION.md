@@ -1,5 +1,20 @@
 # Website and Spinarium verification
 
+## Account-management preparation — 2 October 2026
+
+The owner authorized a protected account directory, disable/restore/session/recovery controls for regular administrators, and a single highest owner who can manage regular administrators. The owner designated their existing saved account; the trusted operator resolved its exact account ID and creation record privately. No owner grant has occurred. Production continues serving the previously verified signup/login release. Prepared policy text describes the upcoming matched account-management deployment.
+
+Completed local checks reported for this update:
+
+- The combined Worker suite passed 59/59 tests: the 40-test login foundation, nine account-management/D1 tests and ten assisted-password-reset tests. Coverage includes successful cookie/session clearing and preservation on failed reset.
+- The base Cloudflare adapter passed 20 checks and the account-administration adapter passed 24. The local Spinarium browser suite passed 71 checks; a subsequent reset-dialog closure guard remains to receive final browser verification.
+- Nine local D1/R2 account checks passed, including hierarchy/active-session races, revision conflicts preserving reset/session state, transactional immutable-audit failure rollback, and owner role changes incrementing the revision once.
+- A 50,000-account local fixture plus its actor produced 50,001 profiles. The scale checks inspected 24 prefix/filter query plans without temporary sort trees, measured at most 400 rows read in the tested page queries, and traversed 501 cursor pages without duplicate or omitted profiles. This establishes bounded/indexed local reads, not hosted throughput or a concurrency guarantee for that population.
+
+Fresh Worker types generation, TypeScript checks and enabled production dry run passed. The prepared package has 45 public served files plus `_headers`, extending the original 43-file login package; the dry run made no remote changes.
+
+Actual staging D1 migration `0003_account_management.sql` and its ledger were applied successfully with 36 statements. Staging users and administrators were empty before this update. The matching staging assets/Worker are being deployed; hosted flow checks, production migration/deployment and owner provisioning remain pending. No large fixture population was added to production. Earlier activation and reset-unavailable statements below record their release checkpoints; they do not establish that the new account-management/reset endpoints are deployed.
+
 ## Production activation — 2 October 2026, 17:30:54 UTC
 
 Worker `spinarium-production` and its 43 public assets are active on route `spindowngames.com/*` (route ID `0689578f458d4124809042de5d84fe40`), backed by D1 `spinarium-production` (`ce02e866-1b5b-4495-bf8b-38719a47b344`) with both migrations and the ledger applied. Generated production configuration disables preview and enables `/api` password signup; no administrator or ownership grant was created.

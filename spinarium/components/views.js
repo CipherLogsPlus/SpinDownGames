@@ -584,7 +584,7 @@ export function renderRoute(route, snapshot, capabilities) {
         "route-intro",
         snapshot.mode === "preview"
           ? "This is a static preview. Real accounts and profile editing are not connected yet."
-          : "Your account is managed by the secure sign-in service. Profile editing is not available yet.",
+          : "Your account is managed by SpinDownGames™. Trusted administrators can help with account profile changes.",
       ),
     );
     const grid = el("div", "route-grid");

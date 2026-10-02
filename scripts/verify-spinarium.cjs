@@ -25,6 +25,18 @@ const fixtureUser = {
   // Editable identity claims never grant a browser administrator authority.
   role: "superadmin", is_admin: true,
 };
+const accountId = (number) => `10000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
+const accountRows = () => Array.from({ length: 55 }, (_, index) => ({
+  id: index === 0 ? fixtureUser.id : accountId(index),
+  email: index === 0 ? fixtureUser.email : `collector${String(index).padStart(2, "0")}@example.test`,
+  emailVerified: false,
+  displayName: index === 0 ? "Current QA Owner" : index === 1 ? "Other QA Administrator" : `QA Collector ${String(index).padStart(2, "0")}`,
+  disabled: index === 54,
+  role: index === 0 ? "owner" : index === 1 ? "admin" : "collector",
+  createdAt: "2026-10-01T12:00:00Z", updatedAt: "2026-10-01T12:00:00Z",
+  lastLoginAt: index === 54 ? null : "2026-10-02T12:00:00Z", revision: 1,
+}));
+const fixtureResetToken = "test_only_reset_token_012345678901234567890";
 const emptySnapshot = () => ({
   schemaVersion: "1", mode: "live",
   profile: { id: fixtureUser.id, displayName: fixtureUser.displayName, memberSince: fixtureUser.memberSince, avatarSrc: null },
@@ -116,7 +128,7 @@ async function checkOverflow(page, width, scale) {
   const size = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
   assert(size.document <= size.viewport + 1, JSON.stringify(size));
 }
-async function createFixture(browser, { scenario = "empty", signedIn = false, signupEnabled = false, apiBase = "/api", reducedMotion = "reduce", mockSpeech = false } = {}) {
+async function createFixture(browser, { scenario = "empty", signedIn = false, signupEnabled = false, apiBase = "/api", reducedMotion = "reduce", mockSpeech = false, initialHash = "signin" } = {}) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion });
   if (mockSpeech) await context.addInitScript(() => {
     window.__spoken = [];
@@ -124,7 +136,8 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
     Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: class { constructor(text) { this.text = text; } } });
   });
   const calls = [];
-  const state = { signedIn, admin: scenario === "admin", expireDashboard: false, adminRows: [], nextConflict: false, holdSave: false, releaseSave: null };
+  const state = { signedIn, admin: ["admin", "accounts", "account-admin"].includes(scenario), actorRole: scenario === "accounts" ? "owner" : ["admin", "account-admin"].includes(scenario) ? "admin" : null, expireDashboard: false, adminRows: [], nextConflict: false, holdSave: false, releaseSave: null,
+    accounts: accountRows(), accountConflict: false, accountDenied: false, accountSearchHolds: new Map(), accountDetailHolds: new Map(), resetUsed: false, loginPassword: fixturePassword };
   if (signedIn) await context.addCookies([{ name: "spinarium_session", value: fixtureCookie, url: base, httpOnly: true, sameSite: "Lax" }]);
   await context.route("**/spinarium/config.js*", (route) => route.fulfill({
     status: 200, contentType: "text/javascript",
@@ -133,7 +146,7 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
   await context.route("**/api/**", async (route) => {
     const request = route.request(), url = new URL(request.url()), method = request.method();
     const headers = request.headers();
-    calls.push({ path: url.pathname, method, csrf: headers["x-csrf-token"], authorization: headers.authorization, body: request.postData(), cookie: headers.cookie || "" });
+    calls.push({ path: url.pathname, search: Object.fromEntries(url.searchParams), method, csrf: headers["x-csrf-token"], ifMatch: headers["if-match"], authorization: headers.authorization, body: request.postData(), cookie: headers.cookie || "" });
     const respond = (value, status = 200, responseHeaders = {}) => route.fulfill({ status, headers: { "cache-control": "no-store", ...responseHeaders }, contentType: "application/json", body: status === 204 ? "" : JSON.stringify(value) });
     if (url.pathname === "/api/auth/session" && method === "GET") {
       if (scenario === "unavailable") return respond({ error: "Private provider detail must never be rendered" }, 503);
@@ -146,7 +159,7 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
       const body = request.postDataJSON();
       assert.deepEqual(Object.keys(body).sort(), ["email", "password"]);
       assert.equal(body.email, fixtureUser.email);
-      if (scenario === "invalid-login" || body.password !== fixturePassword)
+      if (scenario === "invalid-login" || body.password !== state.loginPassword)
         return respond({ code: "INVALID_CREDENTIALS", message: `Private backend detail: ${body.password}` }, 401);
       state.signedIn = true;
       return respond({ user: fixtureUser, csrfToken: fixtureCsrf, expiresAt: new Date(Date.now() + 3600000).toISOString() }, 200,
@@ -168,10 +181,80 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
       state.signedIn = false;
       return respond({ signedOut: true }, 200, { "set-cookie": "spinarium_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
     }
+    if (url.pathname === "/api/auth/password-reset" && method === "POST") {
+      const input = request.postDataJSON();
+      assert.deepEqual(Object.keys(input).sort(), ["password", "token"]);
+      if (input.token !== fixtureResetToken || state.resetUsed || scenario === "invalid-reset")
+        return respond({ code: "PASSWORD_RESET_UNAVAILABLE", message: "Private token or account detail" }, 400);
+      state.resetUsed = true;
+      state.signedIn = false;
+      state.loginPassword = input.password;
+      return respond({ passwordReset: true });
+    }
     if (!state.signedIn) return respond({ error: "UNAUTHORIZED" }, 401);
     assert(headers.cookie?.includes(fixtureCookie));
     if (url.pathname === "/api/dashboard" && method === "GET") return state.expireDashboard ? respond({ error: "UNAUTHORIZED" }, 401) : respond(scenario === "owned" ? ownedSnapshot() : emptySnapshot());
-    if (url.pathname === "/api/admin/access" && method === "GET") return respond({ admin: state.admin });
+    if (url.pathname === "/api/admin/access" && method === "GET") return respond({ admin: state.admin, role: state.actorRole });
+    if (url.pathname.startsWith("/api/admin/accounts")) {
+      if (!state.admin || state.accountDenied) return respond({ code: "ADMIN_REQUIRED", message: "Private account email must not leak" }, 403);
+      const detail = (row) => {
+        const manage = row.id !== fixtureUser.id && row.role !== "owner" && (state.actorRole === "owner" || row.role === "collector");
+        return { ...row, activeSessionCount: row.disabled ? 0 : 2, ownershipCount: 0, protected: !manage, passwordAccount: true,
+          permissions: { editProfile: manage || row.id === fixtureUser.id, setStatus: manage, revokeSessions: manage, resetPassword: manage && !row.disabled, setRole: manage && state.actorRole === "owner" } };
+      };
+      if (url.pathname === "/api/admin/accounts/summary" && method === "GET") return respond({ total: state.accounts.length, active: state.accounts.filter((row) => !row.disabled).length, disabled: state.accounts.filter((row) => row.disabled).length, admins: state.accounts.filter((row) => row.role !== "collector").length, owners: state.accounts.filter((row) => row.role === "owner").length, currentActorRole: state.actorRole });
+      if (url.pathname === "/api/admin/accounts" && method === "GET") {
+        const search = url.searchParams.get("search") || "", searchBy = url.searchParams.get("searchBy") || "email";
+        const hold = state.accountSearchHolds.get(search);
+        if (hold) await new Promise((resolve) => { hold.release = resolve; });
+        let rows = state.accounts.filter((row) => !search || String(searchBy === "name" ? row.displayName : searchBy === "id" ? row.id : row.email).toLowerCase().includes(search.toLowerCase()));
+        const status = url.searchParams.get("status") || "all", role = url.searchParams.get("role") || "all";
+        rows = rows.filter((row) => status === "all" || row.disabled === (status === "disabled"));
+        rows = rows.filter((row) => role === "all" || row.role === role);
+        const offset = url.searchParams.get("cursor") === "fixture_page_two" ? 50 : 0;
+        const limit = Number(url.searchParams.get("limit") || 50);
+        assert.equal(limit, 50, "Account UI must request bounded 50-row pages");
+        return respond({ accounts: rows.slice(offset, offset + limit), nextCursor: rows.length > offset + limit ? "fixture_page_two" : null, limit });
+      }
+      const match = /^\/api\/admin\/accounts\/([0-9a-f-]+)(?:\/(ownerships|history|revoke-sessions|password-reset|role))?$/.exec(url.pathname);
+      if (match) {
+        const row = state.accounts.find((entry) => entry.id === match[1]);
+        if (!row) return respond({ code: "NOT_FOUND" }, 404);
+        if (method === "GET" && !match[2]) {
+          const hold = state.accountDetailHolds.get(row.id);
+          if (hold) await new Promise((resolve) => { hold.release = resolve; });
+          return respond(detail(row));
+        }
+        if (method === "GET" && match[2] === "ownerships") {
+          assert.equal(Number(url.searchParams.get("limit")), 25);
+          return respond({ ownerships: [], nextCursor: null, limit: 25 });
+        }
+        if (method === "GET" && match[2] === "history") {
+          assert.equal(Number(url.searchParams.get("limit")), 25);
+          return respond({ history: [], nextCursor: null, limit: 25 });
+        }
+        if (method === "PATCH" || method === "POST") {
+          assert.equal(headers["x-csrf-token"], fixtureCsrf);
+          assert.equal(headers["if-match"], `"${row.revision}"`);
+          const input = request.postDataJSON();
+          assert(typeof input.reason === "string" && input.reason.trim().length > 0);
+          if ((!detail(row).permissions.editProfile && input.displayName !== undefined) ||
+            ((input.disabled !== undefined || match[2]) && detail(row).protected) || (match[2] === "role" && state.actorRole !== "owner"))
+            return respond({ code: "PROTECTED_ACCOUNT" }, 403);
+          if (state.accountConflict) {
+            state.accountConflict = false;
+            row.displayName = "Concurrent profile change"; row.revision++;
+            return respond({ code: "ACCOUNT_CHANGED" }, 409);
+          }
+          row.revision++; row.updatedAt = "2026-10-02T13:00:00Z";
+          if (input.displayName !== undefined) row.displayName = input.displayName;
+          if (input.disabled !== undefined) row.disabled = input.disabled;
+          if (match[2] === "role") { assert(["admin", "collector"].includes(input.role)); row.role = input.role; }
+          if (match[2] === "password-reset") return respond({ account: detail(row), resetLink: `${base}/spinarium/#reset-password=${fixtureResetToken}`, expiresAt: new Date(Date.now() + 900000).toISOString() });
+          return respond({ ...detail(row), revokedSessionCount: input.disabled === true || match[2] === "revoke-sessions" ? 2 : 0 });
+        }
+      }
+    }
     if (url.pathname === "/api/admin/veilings" && method === "GET") return state.admin ? respond(state.adminRows) : respond({ error: "FORBIDDEN" }, 403);
     if (url.pathname === "/api/admin/veilings" && method === "POST") {
       if (!state.admin) return respond({ error: "FORBIDDEN" }, 403);
@@ -202,16 +285,16 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   const observed = observe(page);
-  const sessionResponse = apiBase === "/api"
+  const sessionResponse = apiBase === "/api" && !initialHash.startsWith("reset-password=")
     ? page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/session")
     : null;
-  await page.goto(`${base}/spinarium/#signin`, { waitUntil: "commit", timeout: 30000 });
+  await page.goto(`${base}/spinarium/#${initialHash}`, { waitUntil: "commit", timeout: 30000 });
   if (sessionResponse) await sessionResponse;
   await page.waitForLoadState("load");
   await page.waitForFunction(() => !document.body.classList.contains("static-preview") &&
     document.querySelector("#auth-email")?.type === "email" &&
     !document.querySelector("#auth-password-group")?.hidden);
-  if (signedIn && !["unavailable", "malformed"].includes(scenario)) {
+  if (signedIn && !["unavailable", "malformed"].includes(scenario) && !initialHash.startsWith("reset-password=")) {
     await page.waitForSelector("#hub-view:not([hidden])");
     await page.waitForFunction(() => !document.querySelector("#first-login-intro").open);
   }
@@ -249,6 +332,24 @@ async function assertEmptyCollection(page, memberSince) {
   assert.deepEqual(await page.locator("#stats .stat-card strong").allTextContents(), ["0", "0", "0", "0", memberSince]);
   assert(await page.locator("#detail-panel").isHidden());
   await assertBlankCards(page, "#collection-grid", 10);
+}
+async function openAccounts(fixture) {
+  await fixture.page.evaluate(() => { location.hash = "accounts"; });
+  await fixture.page.waitForSelector("#admin-accounts-view:not([hidden])");
+  await fixture.page.waitForFunction(() => document.querySelector("#accounts-list [data-account-id]") && document.querySelector("#accounts-list").getAttribute("aria-busy") !== "true");
+}
+async function selectAccount(fixture, id = accountId(2)) {
+  await fixture.page.locator(`#accounts-list [data-account-id="${id}"]`).click();
+  await fixture.page.waitForSelector("#accounts-selected-name");
+  await fixture.page.waitForFunction(() => document.querySelector("#accounts-detail").getAttribute("aria-busy") !== "true");
+}
+async function confirmAccountAction(page, reason = "Test-only administrator reason") {
+  await page.waitForSelector("#accounts-confirm-dialog[open]");
+  await page.locator("#accounts-action-reason").fill(reason);
+  await page.locator("#accounts-action-confirmed").check();
+  await page.locator("#accounts-confirm-submit").click();
+  await page.waitForFunction(() => !document.querySelector("#accounts-confirm-dialog").open);
+  await page.waitForFunction(() => !document.querySelector("#accounts-refresh").disabled);
 }
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.BROWSER_PATH || undefined, args: ["--no-sandbox", "--enable-unsafe-swiftshader"] });
@@ -439,7 +540,7 @@ async function assertEmptyCollection(page, memberSince) {
       assert(await page.locator("#forgot-password").isHidden());
       await assertBlankCards(page, "#auth-view", 3);
       assert(await page.locator("#auth-recovery-note").isVisible());
-      assert.match(await page.locator("#auth-recovery-note").innerText(), /Password reset is not available yet/);
+      assert.match(await page.locator("#auth-recovery-note").innerText(), /Self-service email resets are unavailable.*administrator.*temporary reset link/);
       await checkAxe(page);
     });
     for (const width of [320, 390]) for (const scale of [100, 200])
@@ -721,6 +822,311 @@ async function assertEmptyCollection(page, memberSince) {
       await fixture.page.evaluate(() => { location.hash = "collection?filter=owned"; });
       await fixture.page.waitForSelector("#dashboard-view:not([hidden])");
       await assertEmptyCollection(fixture.page, "2026");
+    });
+    await test("collector identity claims and direct account routes cannot reveal the private directory", async () => {
+      const fixture = await createFixture(browser, { signedIn: true }); contexts.push(fixture.context);
+      assert(await fixture.page.locator("#admin-accounts-nav").isHidden());
+      await fixture.page.evaluate(() => { localStorage.setItem("spinarium.role", "owner"); location.hash = "accounts"; });
+      await fixture.page.waitForFunction(() => document.querySelector("#route-content").textContent.includes("Admin access required"));
+      assert(await fixture.page.locator("#admin-accounts-view").isHidden());
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").count(), 0);
+      assert(!fixture.calls.some((call) => call.path.startsWith("/api/admin/accounts")));
+      await fixture.page.evaluate(() => localStorage.removeItem("spinarium.role"));
+    });
+    await test("owner account directory loads 50-row pages, cursor next/previous and selected private details", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      assert(!(await fixture.page.locator("#admin-accounts-nav").evaluate((node) => node.hidden)));
+      await openAccounts(fixture);
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").count(), 50);
+      assert.match(await fixture.page.locator("#accounts-detail").innerText(), /Select an account/);
+      assert(await fixture.page.locator("#accounts-previous").isDisabled());
+      await fixture.page.locator("#accounts-next").click();
+      await fixture.page.waitForFunction(() => document.querySelectorAll("#accounts-list [data-account-id]").length === 5);
+      assert(fixture.calls.some((call) => call.path === "/api/admin/accounts" && call.search.cursor === "fixture_page_two" && call.search.limit === "50"));
+      assert(await fixture.page.locator("#accounts-next").isDisabled());
+      await fixture.page.locator("#accounts-previous").click();
+      await fixture.page.waitForFunction(() => document.querySelectorAll("#accounts-list [data-account-id]").length === 50);
+      await selectAccount(fixture);
+      assert.equal(await fixture.page.locator("#accounts-selected-name").innerText(), "QA Collector 02");
+      assert.match(await fixture.page.locator("#accounts-detail").innerText(), /collector02@example.test/);
+      assert.match(await fixture.page.locator("#accounts-detail").innerText(), /Unverified email/);
+      await fixture.page.waitForFunction(() => document.querySelector("#accounts-collection-list").textContent.includes("no owned collection entries"));
+      await fixture.page.locator('[data-account-tab="history"]').click();
+      await fixture.page.waitForFunction(() => document.querySelector("#accounts-history-list").textContent.includes("No administration history"));
+      assert(fixture.calls.filter((call) => /\/(ownerships|history)$/.test(call.path)).every((call) => call.search.limit === "25"));
+      assert.equal(new URL(fixture.page.url()).hash, "#accounts");
+      await assertNoBrowserCredentials(fixture.page);
+    });
+    await test("indexed email/name/UUID search and status/role filters stay out of the browser route", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture);
+      const search = async (by, value, status = "all", role = "all") => {
+        await fixture.page.locator("#accounts-search-kind").selectOption(by);
+        await fixture.page.locator("#accounts-search").fill(value);
+        await fixture.page.locator("#accounts-status-filter").selectOption(status);
+        await fixture.page.locator("#accounts-role-filter").selectOption(role);
+        const response = fixture.page.waitForResponse((res) => new URL(res.url()).pathname === "/api/admin/accounts");
+        await fixture.page.locator("#accounts-search-submit").click(); await response;
+        await fixture.page.waitForFunction(() => document.querySelector("#accounts-list").getAttribute("aria-busy") !== "true");
+        assert.equal(new URL(fixture.page.url()).hash, "#accounts");
+      };
+      await search("email", "collector02@example.test", "active", "collector");
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").count(), 1);
+      await search("name", "Other QA", "active", "admin");
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").getAttribute("data-account-id"), accountId(1));
+      await search("id", fixtureUser.id, "all", "owner");
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").getAttribute("data-account-id"), fixtureUser.id);
+      await search("email", "", "disabled", "collector");
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").getAttribute("data-account-id"), accountId(54));
+      assert(fixture.calls.filter((call) => call.path === "/api/admin/accounts").every((call) => call.search.limit === "50"));
+    });
+    await test("account changes require a reason and explicit confirmation, then send CSRF and saved revision", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture); await selectAccount(fixture);
+      await fixture.page.locator("#accounts-display-name").fill("Updated QA collector");
+      await fixture.page.locator("#accounts-save-profile").click();
+      assert(await fixture.page.locator("#accounts-confirm-dialog").isVisible());
+      const before = fixture.calls.filter((call) => call.method === "PATCH").length;
+      await fixture.page.locator("#accounts-confirm-submit").click();
+      assert.equal(fixture.calls.filter((call) => call.method === "PATCH").length, before);
+      await fixture.page.locator("#accounts-action-reason").fill("Test-only profile correction");
+      await fixture.page.locator("#accounts-confirm-submit").click();
+      assert.equal(fixture.calls.filter((call) => call.method === "PATCH").length, before);
+      await fixture.page.locator("#accounts-action-confirmed").check();
+      await fixture.page.locator("#accounts-confirm-submit").click();
+      await fixture.page.waitForFunction(() => !document.querySelector("#accounts-confirm-dialog").open);
+      assert.equal(await fixture.page.locator("#accounts-selected-name").innerText(), "Updated QA collector");
+      const saved = fixture.calls.find((call) => call.path === `/api/admin/accounts/${accountId(2)}` && call.method === "PATCH");
+      assert.equal(saved.csrf, fixtureCsrf); assert.equal(saved.ifMatch, '"1"');
+      assert.deepEqual(JSON.parse(saved.body), { displayName: "Updated QA collector", reason: "Test-only profile correction" });
+      await fixture.page.locator("#accounts-toggle-status").click();
+      await fixture.page.keyboard.press("Escape");
+      assert.equal(fixture.state.accounts[2].disabled, false);
+      await fixture.page.locator("#accounts-toggle-status").click(); await confirmAccountAction(fixture.page, "Test-only disable");
+      assert.equal(fixture.state.accounts[2].disabled, true);
+      assert.equal(await fixture.page.locator("#accounts-toggle-status").innerText(), "Enable account");
+      await fixture.page.locator("#accounts-toggle-status").click(); await confirmAccountAction(fixture.page, "Test-only enable");
+      assert.equal(fixture.state.accounts[2].disabled, false);
+      await fixture.page.locator("#accounts-revoke-sessions").click(); await confirmAccountAction(fixture.page, "Test-only revoke");
+      assert(fixture.calls.some((call) => call.path.endsWith("/revoke-sessions") && call.method === "POST" && call.csrf === fixtureCsrf));
+    });
+    await test("concurrent account revision requires latest-detail review and a fresh confirmation", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture); await selectAccount(fixture);
+      await fixture.page.locator("#accounts-display-name").fill("Unsaved profile retry");
+      fixture.state.accountConflict = true;
+      await fixture.page.locator("#accounts-save-profile").click(); await confirmAccountAction(fixture.page);
+      await fixture.page.waitForFunction(() => document.querySelector("#accounts-selected-name").textContent === "Concurrent profile change");
+      assert.match(await fixture.page.locator("#accounts-detail-feedback").innerText(), /Review.*confirm.*again/i);
+      const writes = fixture.calls.filter((call) => call.method === "PATCH");
+      assert.equal(writes.length, 1);
+      await fixture.page.locator("#accounts-display-name").fill("Reviewed profile retry");
+      await fixture.page.locator("#accounts-save-profile").click(); await confirmAccountAction(fixture.page);
+      assert.equal(fixture.calls.filter((call) => call.method === "PATCH").at(-1).ifMatch, '"2"');
+      assert.equal(await fixture.page.locator("#accounts-selected-name").innerText(), "Reviewed profile retry");
+    });
+    await test("owner manages other administrators and collector roles while self access remains protected", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture); await selectAccount(fixture, fixtureUser.id);
+      assert(await fixture.page.locator("#accounts-toggle-status").isDisabled());
+      assert(await fixture.page.locator("#accounts-revoke-sessions").isDisabled());
+      assert(await fixture.page.locator("#accounts-issue-reset").isDisabled());
+      assert(await fixture.page.locator("#accounts-save-profile").isEnabled());
+      await selectAccount(fixture, accountId(1));
+      assert(await fixture.page.locator("#accounts-toggle-status").isEnabled());
+      assert(await fixture.page.locator("#accounts-issue-reset").isEnabled());
+      assert.match(await fixture.page.locator("#accounts-change-role").innerText(), /Demote/);
+      await selectAccount(fixture);
+      await fixture.page.locator("#accounts-change-role").click(); await confirmAccountAction(fixture.page, "Test-only owner promotion");
+      assert.equal(fixture.state.accounts[2].role, "admin");
+      assert.deepEqual(JSON.parse(fixture.calls.find((call) => call.path.endsWith("/role")).body), { role: "admin", reason: "Test-only owner promotion" });
+      await fixture.page.locator("#accounts-change-role").click(); await confirmAccountAction(fixture.page, "Test-only owner demotion");
+      assert.equal(fixture.state.accounts[2].role, "collector");
+      assert(!fixture.calls.some((call) => call.body && JSON.parse(call.body).role === "owner"));
+    });
+    await test("ordinary administrator can manage collectors but cannot manage peers or promote roles", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "account-admin" }); contexts.push(fixture.context);
+      await openAccounts(fixture); await selectAccount(fixture, accountId(1));
+      for (const id of ["accounts-save-profile", "accounts-toggle-status", "accounts-revoke-sessions", "accounts-issue-reset"])
+        assert(await fixture.page.locator(`#${id}`).isDisabled());
+      assert.equal(await fixture.page.locator("#accounts-change-role").count(), 0);
+      await selectAccount(fixture);
+      assert(await fixture.page.locator("#accounts-toggle-status").isEnabled());
+      assert.equal(await fixture.page.locator("#accounts-change-role").count(), 0);
+      assert(fixture.calls.every((call) => !call.path.endsWith("/role")));
+    });
+    await test("a slower earlier account search cannot overwrite a newer result", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture);
+      const hold = {}; fixture.state.accountSearchHolds.set("collector02", hold);
+      await fixture.page.locator("#accounts-search").fill("collector02"); await fixture.page.locator("#accounts-search-submit").click();
+      await fixture.page.waitForTimeout(100);
+      assert.equal(typeof hold.release, "function");
+      await fixture.page.locator("#accounts-search").fill("collector03"); await fixture.page.locator("#accounts-search-submit").click();
+      await fixture.page.waitForFunction((id) => document.querySelectorAll("#accounts-list [data-account-id]").length === 1 && document.querySelector("#accounts-list [data-account-id]").dataset.accountId === id, accountId(3));
+      hold.release(); await fixture.page.waitForTimeout(100);
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").getAttribute("data-account-id"), accountId(3));
+    });
+    await test("signout during private account detail loading clears data and discards the delayed response", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture);
+      const hold = {}; fixture.state.accountDetailHolds.set(accountId(2), hold);
+      await fixture.page.locator(`#accounts-list [data-account-id="${accountId(2)}"]`).click();
+      await fixture.page.waitForTimeout(100); assert.equal(typeof hold.release, "function");
+      await fixture.page.locator("#sign-out").click();
+      await fixture.page.waitForSelector("#auth-view:not([hidden])");
+      hold.release(); await fixture.page.waitForTimeout(100);
+      assert.equal(await fixture.page.locator("#accounts-list [data-account-id]").count(), 0);
+      assert.doesNotMatch(await fixture.page.locator("#accounts-detail").innerText(), /collector02@example.test|QA Collector 02/);
+      assert(await fixture.page.locator("#admin-accounts-view").isHidden());
+      await assertNoBrowserCredentials(fixture.page);
+    });
+    await test("server account-access denial removes private directory and selected details", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture); await selectAccount(fixture);
+      fixture.state.accountDenied = true;
+      await fixture.page.locator("#accounts-refresh").click();
+      await fixture.page.waitForFunction(() => document.querySelectorAll("#accounts-list [data-account-id]").length === 0);
+      assert.doesNotMatch(await fixture.page.locator("#accounts-detail").innerText(), /collector02@example.test|QA Collector 02/);
+      assert(await fixture.page.locator("#admin-accounts-view").isHidden());
+      assert(await fixture.page.locator("#admin-accounts-nav").isHidden());
+    });
+    await test("account directory, selected controls and confirmation remain usable on mobile and enlarged text", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await openAccounts(fixture); await selectAccount(fixture);
+      for (const width of [320, 390, 1280]) for (const scale of [100, 200]) {
+        await checkOverflow(fixture.page, width, scale);
+        await checkAxe(fixture.page);
+        await fixture.page.locator("#accounts-toggle-status").focus(); await fixture.page.keyboard.press("Enter");
+        await fixture.page.waitForSelector("#accounts-confirm-dialog[open]");
+        await checkOverflow(fixture.page, width, scale); await checkAxe(fixture.page);
+        await fixture.page.keyboard.press("Escape");
+        assert(await fixture.page.locator("#accounts-toggle-status").evaluate((node) => document.activeElement === node));
+      }
+      assert.deepEqual(fixture.observed.errors, []);
+    });
+    await test("administrator reset links require confirmation and clear on selection, navigation and signout", async () => {
+      const fixture = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(fixture.context);
+      await fixture.page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value) => { window.__copiedResetLink = value; } } }));
+      await openAccounts(fixture); await selectAccount(fixture);
+      const issue = async () => {
+        await fixture.page.locator("#accounts-issue-reset").click();
+        await confirmAccountAction(fixture.page, "Test-only password recovery");
+        await fixture.page.waitForSelector("#accounts-reset-link-panel");
+        assert((await fixture.page.locator("#accounts-reset-link").inputValue()) === `${base}/spinarium/#reset-password=${fixtureResetToken}`, "Reset link projection must match the authorized response");
+        const call = fixture.calls.filter((entry) => entry.path.endsWith("/password-reset")).at(-1);
+        assert.equal(call.csrf, fixtureCsrf); assert(call.ifMatch);
+        assert.deepEqual(JSON.parse(call.body), { reason: "Test-only password recovery" });
+        await assertNoBrowserCredentials(fixture.page);
+      };
+      await issue();
+      await fixture.page.locator("#accounts-reset-copy").click();
+      assert((await fixture.page.evaluate(() => window.__copiedResetLink)) === `${base}/spinarium/#reset-password=${fixtureResetToken}`, "Copy must use the authorized reset link");
+      await fixture.page.locator("#accounts-reset-dismiss").click();
+      assert.equal(await fixture.page.locator("#accounts-reset-link-panel").count(), 0);
+      await issue(); await selectAccount(fixture, accountId(3));
+      assert.equal(await fixture.page.locator("#accounts-reset-link-panel").count(), 0);
+      await issue();
+      await fixture.page.evaluate(() => { location.hash = "dashboard"; });
+      await fixture.page.waitForSelector("#hub-view:not([hidden])");
+      assert.equal(await fixture.page.locator("#accounts-reset-link-panel").count(), 0);
+      await openAccounts(fixture); await selectAccount(fixture); await issue();
+      await fixture.page.locator("#sign-out").click(); await fixture.page.waitForSelector("#auth-view:not([hidden])");
+      assert.equal(await fixture.page.locator("#accounts-reset-link-panel").count(), 0);
+      assertNoSecretsInURLs(fixture.observed.requests);
+    });
+    await test("public reset fragments are scrubbed immediately and stay out of requests and browser storage", async () => {
+      const fixture = await createFixture(browser, { initialHash: `reset-password=${fixtureResetToken}` }); contexts.push(fixture.context);
+      await fixture.page.waitForSelector("#password-reset-view:not([hidden])");
+      assert(!fixture.calls.some((call) => call.path === "/api/auth/session"), "Reset landing must not restore a session before handling the scrubbed fragment");
+      assert(!fixture.page.url().includes(fixtureResetToken));
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      assert(!fixture.calls.some((call) => call.path === "/api/dashboard"));
+      await assertNoBrowserCredentials(fixture.page);
+      assert(fixture.observed.requests.every(({ url }) => !url.includes(fixtureResetToken)));
+      for (const width of [320, 390, 1280]) for (const scale of [100, 200]) await checkOverflow(fixture.page, width, scale);
+      await checkAxe(fixture.page);
+      await fixture.page.locator("#password-reset-password").fill("short");
+      await fixture.page.locator("#password-reset-confirm").fill("short");
+      await fixture.page.locator("#password-reset-submit").click();
+      assert(!fixture.calls.some((call) => call.path === "/api/auth/password-reset"));
+      await fixture.page.locator("#password-reset-password").fill("a".repeat(129));
+      await fixture.page.locator("#password-reset-confirm").fill("a".repeat(129));
+      await fixture.page.locator("#password-reset-submit").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#password-reset-feedback").textContent.trim());
+      assert(!fixture.calls.some((call) => call.path === "/api/auth/password-reset"));
+      const updated = "New-test-only-passphrase42!";
+      await fixture.page.locator("#password-reset-password").fill(updated);
+      await fixture.page.locator("#password-reset-confirm").fill("Mismatch-test-only-passphrase42!");
+      await fixture.page.locator("#password-reset-submit").click();
+      assert(!fixture.calls.some((call) => call.path === "/api/auth/password-reset"));
+      await fixture.page.locator("#password-reset-password").fill(updated);
+      await fixture.page.locator("#password-reset-confirm").fill(updated);
+      await fixture.page.locator("#password-reset-submit").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#password-reset-feedback").textContent.includes("Your password has been changed"));
+      assert.match(await fixture.page.locator("#password-reset-feedback").innerText(), /password.*changed.*sign in/i);
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      assert.equal(await fixture.page.locator("#password-reset-password").inputValue(), "");
+      assert.equal(await fixture.page.locator("#password-reset-confirm").inputValue(), "");
+      assert.equal(fixture.state.signedIn, false);
+      await assertNoBrowserCredentials(fixture.page);
+      await fixture.page.locator("#password-reset-signin").click();
+      await fixture.page.waitForSelector("#auth-view:not([hidden])");
+      await passwordSignIn(fixture.page);
+      await fixture.page.waitForFunction(() => document.querySelector("#auth-feedback").textContent.includes("Sign-in failed"));
+      await passwordSignIn(fixture.page, updated);
+      await fixture.page.waitForSelector("#hub-view:not([hidden])");
+      await fixture.page.waitForFunction(() => !document.querySelector("#first-login-intro").open);
+      await openCollection(fixture.page); await assertEmptyCollection(fixture.page, "2026");
+    });
+    await test("reset while already signed in stays on recovery and invalid or used links fail generically", async () => {
+      const cached = await createFixture(browser, { signedIn: true, scenario: "accounts" }); contexts.push(cached.context);
+      await openAccounts(cached); await selectAccount(cached);
+      await cached.page.evaluate((token) => { location.hash = `reset-password=${token}`; }, fixtureResetToken);
+      await cached.page.waitForSelector("#password-reset-view:not([hidden])");
+      assert(!cached.page.url().includes(fixtureResetToken));
+      assert(await cached.page.locator("#hub-view").isHidden());
+      assert(await cached.page.locator("#admin-accounts-view").isHidden());
+      assert.equal(await cached.page.locator("#accounts-list [data-account-id]").count(), 0);
+      cached.state.resetUsed = true;
+      await cached.page.locator("#password-reset-password").fill(fixturePassword);
+      await cached.page.locator("#password-reset-confirm").fill(fixturePassword);
+      await cached.page.locator("#password-reset-submit").click();
+      await cached.page.waitForFunction(() => document.querySelector("#password-reset-fields").disabled && /invalid|expired/i.test(document.querySelector("#password-reset-feedback").textContent));
+      assert.equal(await cached.page.locator("#password-reset-signin").innerText(), "Return to your Spinarium");
+      await cached.page.locator("#password-reset-signin").click();
+      await cached.page.waitForSelector("#hub-view:not([hidden])");
+      assert(await cached.page.locator("#navigation-toggle").isVisible());
+      assert.equal(cached.state.signedIn, true);
+      cached.state.resetUsed = false;
+      await cached.page.evaluate((token) => { location.hash = `reset-password=${token}`; }, fixtureResetToken);
+      await cached.page.waitForSelector("#password-reset-view:not([hidden])");
+      await cached.page.locator("#password-reset-password").fill("Updated-test-only-passphrase42!");
+      await cached.page.locator("#password-reset-confirm").fill("Updated-test-only-passphrase42!");
+      await cached.page.locator("#password-reset-submit").click();
+      await cached.page.waitForFunction(() => document.querySelector("#password-reset-feedback").textContent.includes("Your password has been changed"));
+      assert(await cached.page.locator("#hub-view").isHidden());
+      await cached.page.locator("#password-reset-signin").click();
+      await cached.page.waitForSelector("#auth-view:not([hidden])");
+      assert.equal(cached.state.signedIn, false);
+      await assertNoBrowserCredentials(cached.page);
+      const fixture = await createFixture(browser, { signedIn: true, initialHash: `reset-password=${fixtureResetToken}` }); contexts.push(fixture.context);
+      await fixture.page.waitForSelector("#password-reset-view:not([hidden])");
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      assert(!fixture.page.url().includes(fixtureResetToken));
+      fixture.state.resetUsed = true;
+      await fixture.page.locator("#password-reset-password").fill(fixturePassword);
+      await fixture.page.locator("#password-reset-confirm").fill(fixturePassword);
+      await fixture.page.locator("#password-reset-submit").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#password-reset-feedback").textContent.trim());
+      assert.doesNotMatch(await fixture.page.locator("#password-reset-feedback").innerText(), /Private|token or account/);
+      assert.equal(await fixture.page.locator("#password-reset-password").inputValue(), "");
+      assert.equal(await fixture.page.locator("#password-reset-confirm").inputValue(), "");
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      await assertNoBrowserCredentials(fixture.page);
+      await fixture.page.locator("#password-reset-signin").click();
+      await fixture.page.waitForSelector("#auth-view:not([hidden])");
+      assert(!fixture.page.url().includes(fixtureResetToken));
     });
     await test("runtime has no demo imports, browser bearer tokens, script errors, or failed assets", async () => {
       for (const observed of [observedPreview, configured.observed, unconfigured.observed]) {

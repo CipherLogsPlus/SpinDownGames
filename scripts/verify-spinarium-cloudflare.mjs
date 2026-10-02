@@ -129,6 +129,51 @@ await test("wrong credentials and unavailable signup expose only safe errors and
   assert.equal(signup.getSession(), null);
 });
 
+await test("one-time password reset posts only token/password and clears identity without auto-login", async () => {
+  const calls = [];
+  const token = "r".repeat(43);
+  const auth = createAuthClient(config, { fetchImpl: async (path, options) => {
+    calls.push({ path, options });
+    return json(path.endsWith("/session") ? sessionData() : { passwordReset: true, role: "owner" });
+  } });
+  await auth.consumeAuthCallback();
+  const reset = await auth.resetPassword({ token, password: account.password, email: account.email, role: "owner" });
+  assert.deepEqual(reset, { passwordReset: true });
+  assert.equal(auth.getSession(), null);
+  assert.equal(auth.getCsrfToken(), null);
+  assert.equal(calls[1].path, "/api/auth/password-reset");
+  assert.deepEqual(JSON.parse(calls[1].options.body), { token, password: account.password });
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[1].options.credentials, "same-origin");
+  assert.equal(calls[1].options.mode, "same-origin");
+  assert.equal(calls[1].options.redirect, "error");
+  assert.equal(calls[1].options.headers.Authorization, undefined);
+  assert.equal(calls[1].options.headers["x-csrf-token"], undefined);
+});
+
+await test("invalid, cancelled and expired reset links never leak secrets or clear an unrelated identity", async () => {
+  const calls = [];
+  let status = 400;
+  const auth = createAuthClient(config, { fetchImpl: async (path, options) => {
+    calls.push({ path, options });
+    if (path.endsWith("/session")) return json(sessionData());
+    return json({ code: "PASSWORD_RESET_UNAVAILABLE", message: "private-provider-detail" }, status);
+  } });
+  await auth.consumeAuthCallback();
+  const identity = auth.getSession();
+  await rejectCode(auth.resetPassword({ token: "bad-token", password: account.password }), "PASSWORD_RESET_UNAVAILABLE");
+  await rejectCode(auth.resetPassword({ token: "r".repeat(43), password: "too-short" }), "INVALID_PASSWORD");
+  assert.equal(calls.length, 1);
+  await rejectCode(auth.resetPassword({ token: "r".repeat(43), password: account.password }), "PASSWORD_RESET_UNAVAILABLE");
+  assert.equal(auth.getSession(), identity);
+  status = 429;
+  await rejectCode(auth.resetPassword({ token: "r".repeat(43), password: account.password }), "RATE_LIMITED");
+  const controller = new AbortController(); controller.abort();
+  await rejectCode(auth.resetPassword({ token: "r".repeat(43), password: account.password, signal: controller.signal }), "CANCELLED");
+  assert.equal(auth.getSession(), identity);
+  auth.invalidateSession();
+});
+
 await test("session hydration strips privilege claims and tokens while using same-origin cookies", async () => {
   const calls = [];
   const auth = createAuthClient(config, { fetchImpl: async (path, options) => {

@@ -14,7 +14,7 @@ The earlier disabled deployment returned HTTP 200 from `/api/health`, with accou
 
 Production D1 `spinarium-production` (`ce02e866-1b5b-4495-bf8b-38719a47b344`) has also been created with foundation/password migrations and ledger applied. It received both migrations and now backs the active production Worker. Route `spindowngames.com/*` (ID `0689578f458d4124809042de5d84fe40`) is active with 43 public assets and `_headers` metadata. The four apex A records are proxied but retain `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, and `185.199.111.153`; `www` remains a DNS-only CNAME to `cipherlogsplus.github.io`. Always Use HTTPS is enabled; the active Full SSL mode, repository `CNAME` and Pages deployment are preserved. Initial stale-DNS requests reached the old Pages response before propagation; fresh health requests returned HTTP 200 with accounts enabled and claims disabled.
 
-R2 still returns `10042`; no bucket exists. Email-service access returned `2036 Unauthorized`. Neither blocks saving accounts or password login. R2 blocks private artwork work; absent email delivery means password reset is unavailable for every account. Preserve the unrelated existing Worker and InvoHub.
+R2 still returns `10042`; no bucket exists. Email-service access returned `2036 Unauthorized`. Neither blocks saving accounts or password login. R2 blocks private artwork work. The currently deployed login release has no reset; a pending account-management update adds administrator-assisted recovery without email delivery. Automatic email recovery remains unavailable. Preserve the unrelated existing Worker and InvoHub.
 
 ## Direct credential backend
 
@@ -38,7 +38,28 @@ Sessions use an opaque Secure, HttpOnly cookie, a D1 token digest, eight-hour ex
 | `POST /api/admin/veilings/:id/artwork` | Administrator artwork upload/attachment; private R2 required. |
 | `GET /api/artwork/:artworkId` | Administrator or authorized owner of current non-draft/revealed artwork. |
 
-There is no reset, claim, ownership issuance, discovery award, achievement award, production or role-mutation endpoint in this milestone.
+The deployed login release has no reset or role-mutation endpoint. The pending update below adds constrained administration and assisted reset; claims, ownership issuance, discovery/achievement awards and production remain unavailable.
+
+## Pending account-management update
+
+`0003_account_management.sql` extends the private allowlist with owner/admin roles and a single-owner constraint, adds account revision/last-sign-in fields, indexed directory search, single-use password-reset digests and append-only account audit. Cached directory fields accelerate reads; authorization uses the current allowlist/session and rechecks it inside writes. The migration and ledger were applied to the initially empty staging database, with 36 statements completed. Matching staging deployment is in progress; hosted flow verification, production migration/deployment and the exact owner grant remain pending.
+
+Only a trusted operator can provision or transfer the owner role. The owner alone can appoint/remove regular administrators through the management API. Regular administrators manage collectors; the owner can also manage regular administrators. Self display-name updates are allowed; destructive owner/self actions are denied. None of these operations grant ownership.
+
+| New API | Behavior |
+| --- | --- |
+| `GET /api/admin/accounts`, `GET /api/admin/accounts/summary` | Authorized directory with indexed prefix search, role/status filters and opaque cursor pagination; separate aggregate counts. |
+| `GET /api/admin/accounts/:id` | Safe account profile, counts and permitted actions; no credential hashes or tokens. |
+| `GET /api/admin/accounts/:id/ownerships`, `GET /api/admin/accounts/:id/history` | Bounded cursor pages of existing collection records and safe account audit. |
+| `PATCH /api/admin/accounts/:id` | Authorized display-name or disable/restore change with a reason. |
+| `POST /api/admin/accounts/:id/revoke-sessions` | Authorized session revocation with a reason. |
+| `PATCH /api/admin/accounts/:id/role` | Owner-only regular-administrator appointment/removal with a reason; no owner setter. |
+| `POST /api/admin/accounts/:id/password-reset` | Authorized 15-minute one-use reset link, returned once for private sharing after requester proof; no email is sent. |
+| `POST /api/auth/password-reset` | Same-origin, rate-limited reset consumption; password update/token consumption/session revocation are atomic, with no automatic login. |
+
+Administrative mutations require origin/CSRF checks, a 1–500 character reason and quoted numeric `If-Match` revision. Directory pages default to 50/max 100; ownership/history default to 25/max 100. Email search uses normalized identifiers; display-name folding is ASCII-only. Search `%` and `_` are literal prefix text. Cursors are bound to search/filter scope. See [the complete guide](SPINARIUM-ACCOUNT-MANAGEMENT.md).
+
+Apply the checked migration to staging first and verify saved accounts still sign in. Test collector/admin/owner boundaries, stale revisions, revocation, protected owner/self controls, immutable audit, reset expiry/replay and issuer revocation. Then apply it to production, deploy matching assets/Worker and verify actual access before recording activation or granting the designated owner. Never seed a large fixture into production. Rollback retains the new schema, saved profiles, credentials and audit; use a compatible code version and matching assets without recreating D1.
 
 ## Local and hosted verification
 
@@ -65,7 +86,7 @@ npm run prepare:production
 npm run dry-run:production
 ```
 
-`prepare:production` runs `node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled`. It generates `.production-assets` with preview disabled, `/api` enabled, signup enabled and no credentials. The allowlist excludes backend source, migrations, documentation, dependencies, legacy/demo adapters and Git metadata. The generated package contains 43 served files plus `_headers`; the active production configuration enables password/auth/signup and uses the production D1 ID and apex route.
+`prepare:production` runs `node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled`. It generates `.production-assets` with preview disabled, `/api` enabled, signup enabled and no credentials. The allowlist excludes backend source, migrations, documentation, dependencies, legacy/demo adapters and Git metadata. The account-management package contains 45 served files plus `_headers`, extending the original 43-file live login package. The production configuration enables password/auth/signup and uses the production D1 ID and apex route; generating or dry-running it does not deploy this pending update.
 
 `dry-run:production` prepares those assets and runs `wrangler deploy --config wrangler.production.jsonc --dry-run`. It passed locally and is included in CI; it does not change hosted resources. To deploy a verified update through an authenticated CLI, check `npx wrangler whoami`, then use `npx wrangler deploy --config wrangler.production.jsonc`. This session deployed through the authenticated connector; its authorization does not authenticate Wrangler. Never deploy the default local configuration to production, and inspect migration state before applying any pending remote migration.
 

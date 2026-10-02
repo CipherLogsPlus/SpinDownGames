@@ -44,5 +44,6 @@ jobs:
       - name: Browser adapter and collection contracts
         run: |
           node ../../scripts/verify-spinarium-cloudflare.mjs
+          node ../../scripts/verify-spinarium-account-admin-adapter.mjs
           node ../../scripts/verify-spinarium-domain.mjs
           node ../../scripts/verify-spinarium-intro.mjs

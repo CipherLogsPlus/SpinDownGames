@@ -4,6 +4,7 @@ import { createSpinariumService } from "./data/cloudflare-service.js";
 import { createPreviewAccess } from "./data/preview-service.js";
 import { createFirstLoginIntro } from "./components/first-login-intro.js";
 import { createDashboardReveal } from "./components/dashboard-reveal.js";
+import { createAdminAccountsController } from "./components/admin-accounts.js";
 import { renderHomeHub } from "./components/home-hub.js";
 import { parseRoute } from "./domain/routing.js";
 import { getVeilingDetail, queryCollection } from "./domain/collection.js";
@@ -17,6 +18,27 @@ import {
   renderRoute,
   renderFullDetail,
 } from "./components/views.js";
+
+// Fragment credentials remain in memory and are scrubbed before session reads.
+let resetToken = null;
+let resetLanding = false;
+let resetComplete = false;
+let resetBusy = false;
+let resetRequest = null;
+function captureResetLink() {
+  if (!location.hash.startsWith("#reset-password=")) return;
+  resetRequest?.abort();
+  resetRequest = null;
+  resetBusy = false;
+  for (const fieldId of ["password-reset-password", "password-reset-confirm"])
+    document.getElementById(fieldId).value = "";
+  resetLanding = true;
+  resetComplete = false;
+  const match = /^#reset-password=([A-Za-z0-9_-]{43})$/.exec(location.hash);
+  resetToken = match?.[1] || null;
+  history.replaceState(null, "", location.pathname + location.search + "#reset-password");
+}
+captureResetLink();
 
 // Preview is explicitly selected; provider failures never fall back to it.
 const preview = spinariumConfig.previewEnabled === true;
@@ -39,15 +61,31 @@ const state = {
   capabilities: null,
   selectedId: null,
   admin: false,
+  adminRole: null,
   authBusy: false,
   epoch: 0,
   query: { search: "", filter: "owned", sort: "number" },
 };
-const authRoutes = new Set(["signin", "signup", "reset", "update-password"]);
+const authRoutes = new Set(["signin", "signup", "reset", "update-password", "reset-password"]);
 let authMode = "signin";
 let adminRows = [];
 let adminSaving = false;
 let adminRevision = null;
+const accounts = createAdminAccountsController({
+  root: $("#admin-accounts-content"), service,
+  onAccessLost() {
+    state.admin = false;
+    state.adminRole = null;
+    $("#admin-nav").hidden = true;
+    $("#admin-accounts-nav").hidden = true;
+    route();
+  },
+  async onProfileChanged(account) {
+    if (account.id !== state.session?.user.id) return;
+    // The session projection, rather than the editor draft, updates the header.
+    try { await auth.getCurrentUser(); } catch { auth.invalidateSession?.(); }
+  },
+});
 hydrateIcons();
 
 function feedback(message, isError = false) {
@@ -145,10 +183,14 @@ function setAuthMode(mode) {
   clearPasswords();
 }
 function clearPrivateViews() {
+  accounts.reset();
   firstLoginIntro.reset();
   state.snapshot = null;
   state.selectedId = null;
   state.admin = false;
+  state.adminRole = null;
+  $("#signed-in-account-id").value = "";
+  $("#account-id-feedback").textContent = "";
   state.query = { search: "", filter: "owned", sort: "number" };
   $("#collection-search").value = "";
   $("#catalog-search").value = "";
@@ -186,10 +228,31 @@ function signedOutView() {
     "claim-open",
     "admin-nav",
     "loading-status",
+    "admin-accounts-nav",
+    "admin-accounts-view",
+    "password-reset-view",
+    "signed-in-account",
   ])
     $("#" + id).hidden = true;
   $("#profile-name").textContent = "Collector";
   navigationSize();
+}
+function resetView() {
+  signedOutView();
+  for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+  $("#auth-view").hidden = true;
+  $("#guest-tools").hidden = true;
+  $("#password-reset-view").hidden = false;
+  $("#navigation-toggle").hidden = true;
+  $("#password-reset-signin").textContent = state.session && !resetComplete ? "Return to your Spinarium" : "Return to sign in";
+  $("#password-reset-signin").href = state.session && !resetComplete ? "#dashboard" : "#signin";
+  $("#password-reset-fields").disabled = resetBusy || resetComplete || !resetToken || !auth.configured || !passwordProvider;
+  if (!resetComplete && !resetBusy && (!resetToken || !auth.configured || !passwordProvider)) {
+    $("#password-reset-feedback").textContent = !auth.configured || !passwordProvider
+      ? "Password reset is unavailable on this page."
+      : "This reset link is invalid or has expired. Ask an administrator for a new link.";
+  }
+  document.title = "Reset password · Spinarium — SpinDownGames™";
 }
 function selectedDetail() {
   return state.snapshot
@@ -248,13 +311,14 @@ async function loadCollection() {
   $("#loading-status").className = "";
   $("#loading-status").textContent = "Opening your collection…";
   try {
-    const [snapshot, admin] = await Promise.all([
+    const [snapshot, adminContext] = await Promise.all([
       service.getDashboard(),
-      service.getAdminAccess(),
+      service.getAdminContext ? service.getAdminContext() : Promise.resolve({ admin: false, role: null }),
     ]);
     if (epoch !== state.epoch || !auth.getSession()) return;
     state.snapshot = snapshot;
-    state.admin = admin === true;
+    state.admin = adminContext.admin === true;
+    state.adminRole = state.admin ? adminContext.role : null;
     state.capabilities = service.getCapabilities();
     state.selectedId = null;
     $("#stats").replaceChildren(renderStats(snapshot));
@@ -263,6 +327,7 @@ async function loadCollection() {
     updateCollection();
     updateSelection();
     $("#admin-nav").hidden = !state.admin;
+    $("#admin-accounts-nav").hidden = !state.admin;
     $("#loading-status").hidden = true;
     route();
 
@@ -274,6 +339,10 @@ async function handleSession(session) {
   const epoch = ++state.epoch;
   state.session = session;
   clearPrivateViews();
+  if (resetLanding && location.hash === "#reset-password") {
+    resetView();
+    return;
+  }
   if (!session) {
     signedOutView();
     setAuthMode("signin");
@@ -294,6 +363,7 @@ async function handleSession(session) {
   }
   document.body.classList.remove("auth-gated");
   $("#auth-view").hidden = true;
+  $("#password-reset-view").hidden = true;
   $("#guest-tools").hidden = true;
   $("#account-tools").hidden = false;
   $("#sidebar-nav").hidden = false;
@@ -309,6 +379,34 @@ async function handleSession(session) {
 function route() {
   const parsed = parseRoute(location.hash, Boolean(state.session));
   const requested = parsed.name;
+  if (requested === "reset-password") {
+    resetLanding = true;
+    accounts.reset();
+    resetView();
+    return;
+  }
+  if (resetLanding) {
+    resetRequest?.abort();
+    resetRequest = null;
+    resetBusy = false;
+    resetLanding = false;
+    resetToken = null;
+    resetComplete = false;
+    $("#password-reset-password").value = "";
+    $("#password-reset-confirm").value = "";
+    $("#password-reset-feedback").textContent = "";
+    if (state.session) {
+      document.body.classList.remove("auth-gated");
+      $("#auth-view").hidden = true;
+      $("#guest-tools").hidden = true;
+      $("#account-tools").hidden = false;
+      $("#sidebar-nav").hidden = false;
+      $("#admin-nav").hidden = !state.admin;
+      $("#admin-accounts-nav").hidden = !state.admin;
+      navigationSize();
+    }
+  }
+  $("#password-reset-view").hidden = true;
   if (!state.session || state.session.flow === "recovery") {
     signedOutView();
     setAuthMode(
@@ -318,7 +416,10 @@ function route() {
       history.replaceState(null, "", "#signin");
     return;
   }
-  if (!state.snapshot) return;
+  if (!state.snapshot) {
+    loadCollection();
+    return;
+  }
   const name =
     requested === "main-content" || authRoutes.has(requested)
       ? "dashboard"
@@ -343,13 +444,28 @@ function route() {
     updateCollection();
   }
   $("#route-view").hidden =
-    name === "dashboard" || collectionPage || name === "admin";
+    name === "dashboard" || collectionPage || name === "admin" || name === "accounts";
   $("#admin-view").hidden = name !== "admin" || !state.admin;
+  $("#admin-accounts-view").hidden = name !== "accounts" || !state.admin;
+  $("#signed-in-account").hidden = name !== "settings";
+  if (name === "settings") $("#signed-in-account-id").value = state.session.user.id;
+  if (name !== "accounts") accounts.reset();
   document.querySelectorAll("[data-nav]").forEach((link) => {
     if (link.dataset.nav === name || (link.dataset.nav === "explore" && name === "upcoming")) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
-  if (name === "admin") {
+  if (name === "accounts") {
+    if (state.admin) {
+      accounts.open({ actorId: state.session.user.id, actorRole: state.adminRole });
+      document.title = "Accounts · Spinarium — SpinDownGames™";
+    } else {
+      accounts.reset();
+      $("#route-view").hidden = false;
+      const title = el("h2", "", "Admin access required");
+      title.id = "route-title";
+      $("#route-content").replaceChildren(title, el("p", "", "Your account is not authorized to view or manage accounts."));
+    }
+  } else if (name === "admin") {
     if (state.admin) {
       loadAdmin();
       document.title = "Veiling Studio · Spinarium — SpinDownGames™";
@@ -370,7 +486,7 @@ function route() {
     $("#route-content").replaceChildren(
       renderRoute(name, state.snapshot, state.capabilities),
     );
-  if (name !== "admin") document.title = "Spinarium — SpinDownGames™";
+  if (name !== "admin" && name !== "accounts") document.title = "Spinarium — SpinDownGames™";
   closeNavigation();
 }
 function openDialog(dialog, trigger) {
@@ -440,6 +556,66 @@ async function signOut() {
 }
 $("#sign-out").addEventListener("click", signOut);
 $("#menu-sign-out").addEventListener("click", signOut);
+$("#copy-account-id").addEventListener("click", async () => {
+  const accountId = state.session?.user.id;
+  if (!accountId) return;
+  try {
+    await navigator.clipboard.writeText(accountId);
+    if (state.session?.user.id === accountId) $("#account-id-feedback").textContent = "Account ID copied.";
+  } catch {
+    if (state.session?.user.id !== accountId) return;
+    $("#signed-in-account-id").focus();
+    $("#signed-in-account-id").select();
+    $("#account-id-feedback").textContent = "Select and copy your account ID.";
+  }
+});
+$("#password-reset-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (resetBusy || !resetToken || !auth.configured || !passwordProvider) return;
+  let password = $("#password-reset-password").value;
+  const clear = () => {
+    $("#password-reset-password").value = "";
+    $("#password-reset-confirm").value = "";
+  };
+  if (password !== $("#password-reset-confirm").value) {
+    password = "";
+    clear();
+    $("#password-reset-feedback").textContent = "The passwords do not match. Please enter them again.";
+    return;
+  }
+  resetBusy = true;
+  const token = resetToken;
+  const controller = new AbortController();
+  resetRequest = controller;
+  $("#password-reset-fields").disabled = true;
+  $("#password-reset-feedback").textContent = "Saving your new password…";
+  try {
+    await auth.resetPassword({ token, password, signal: controller.signal });
+    if (controller.signal.aborted || resetRequest !== controller) return;
+    resetToken = null;
+    resetComplete = true;
+    clearPrivateViews();
+    state.session = null;
+    if (resetLanding && location.hash === "#reset-password") {
+      resetView();
+      $("#password-reset-feedback").textContent = "Your password has been changed. Return to sign in with your new password.";
+    }
+  } catch (error) {
+    if (!controller.signal.aborted && resetRequest === controller && resetToken === token && resetLanding) {
+      if (error?.code === "PASSWORD_RESET_UNAVAILABLE") resetToken = null;
+      $("#password-reset-feedback").textContent = error instanceof AuthError
+        ? error.message : "The password could not be reset. Please try again.";
+    }
+  } finally {
+    password = "";
+    if (resetRequest === controller) {
+      clear();
+      resetRequest = null;
+      resetBusy = false;
+      if (resetLanding) $("#password-reset-fields").disabled = resetComplete || !resetToken || !auth.configured;
+    }
+  }
+});
 $("#collection-search").addEventListener("input", (event) => {
   if (!state.snapshot) return;
   state.query.search = event.currentTarget.value;
@@ -497,6 +673,7 @@ document.addEventListener("keydown", (event) => {
 });
 mobile.addEventListener("change", navigationSize);
 window.addEventListener("hashchange", () => {
+  captureResetLink();
   feedback("");
   route();
   if (state.session && state.snapshot) $("#main-content").focus({ preventScroll: true });
@@ -633,7 +810,10 @@ $("#admin-form").addEventListener("submit", async (event) => {
 auth.onAuthStateChange(handleSession);
 signedOutView();
 setAuthMode(location.hash.slice(1));
-try {
+if (resetLanding || location.hash === "#reset-password") {
+  resetLanding = true;
+  resetView();
+} else try {
   const callback = await auth.consumeAuthCallback();
   if (!callback.handled) route();
 } catch (error) {

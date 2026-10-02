@@ -1,6 +1,7 @@
 import { requireCsrf, requireSession, type AuthSession } from './auth';
 import { HttpError, json, readBytes, readJson } from './http';
 import type { Env } from './types';
+import { getAdminRole, handleAdminAccounts } from './admin-accounts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ARTWORK_BYTES = 8 * 1024 * 1024;
@@ -334,6 +335,8 @@ async function artwork(env: Env, session: AuthSession, id: string): Promise<Resp
 }
 
 export async function handleData(request: Request, env: Env): Promise<Response | null> {
+  const accountResponse = await handleAdminAccounts(request, env);
+  if (accountResponse) return accountResponse;
   const path = new URL(request.url).pathname;
   const veilingMatch = path.match(/^\/api\/admin\/veilings\/([^/]+)(\/artwork)?$/);
   const artworkMatch = path.match(/^\/api\/artwork\/([^/]+)$/);
@@ -346,7 +349,8 @@ export async function handleData(request: Request, env: Env): Promise<Response |
   }
   if (path === '/api/admin/access') {
     if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET for this endpoint.');
-    return json({ admin: await isAdmin(env, session.userId) });
+    const role = await getAdminRole(env, session.userId);
+    return json({ admin: role !== null, role });
   }
   if (artworkMatch) {
     if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET for this endpoint.');

@@ -18,13 +18,13 @@ Introduction completion remains browser-local. No per-account introduction field
 
 ## Recovery and artwork limits
 
-Password reset is unavailable for **every account**, including accounts using a real mailbox. Email sending is not configured; an email-service access check returned `2036 Unauthorized`. A future reset service must verify delivery and use a secure expiring recovery credential. Do not imply that supplying a real email currently enables recovery.
+The production login release has no password reset, including for accounts using a real mailbox. An account-management update adds administrator-assisted recovery through a private, 15-minute single-use reset link. Its migration is applied to staging; hosted verification, production deployment and owner provisioning remain pending. See [account management](SPINARIUM-ACCOUNT-MANAGEMENT.md). Automatic email recovery remains unavailable: email sending is not configured, and an email-service access check returned `2036 Unauthorized`. Supplying a real email does not enable automatic recovery.
 
 R2 setup remains unavailable with error `10042`. This blocks private artwork administration, not signup, login or saving accounts in D1. The empty-collection account milestone does not need an artwork bucket or email sender.
 
 ## Authorization and verification
 
-Only a trusted operator can add an explicitly confirmed account ID to `admin_allowlist`. Signup never promotes a collector; email, profile text, browser flags and the first account do not grant authority. Catalog creation never creates ownership. InvoHub remains a separate service.
+The account-management update defines one operator-provisioned owner and regular administrators. Only the owner may appoint or remove regular administrators; administrators manage collectors, while the owner may also manage regular administrators. These features and the designation of the owner's existing account are pending deployment and verification. Signup never promotes a collector; email, profile text, browser flags and the first account do not grant authority. Catalog creation never creates ownership. InvoHub remains a separate service.
 
 Keep verifying real hosted signup, failed login, reload persistence, expiry/logout, duplicate-account behavior, CSRF/origin rejection, rate limits and collector/admin denial against deployed changes. Local tests and prior OIDC fixtures are separate evidence. Preserve the Pages rollback path and D1 account data during updates. See [activation](SPINARIUM-ACTIVATION.md), [Cloudflare deployment](SPINARIUM-CLOUDFLARE.md) and [administration](SPINARIUM-ADMIN.md).
 
