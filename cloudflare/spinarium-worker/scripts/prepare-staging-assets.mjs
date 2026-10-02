@@ -4,15 +4,17 @@ import { fileURLToPath } from 'node:url';
 
 const workerRoot = fileURLToPath(new URL('../', import.meta.url));
 const repositoryRoot = path.resolve(workerRoot, '../..');
-const destination = path.join(workerRoot, '.staging-assets');
 const argumentsSet = new Set(process.argv.slice(2));
-const allowedArguments = new Set(['--accounts-enabled', '--signup-enabled']);
+const allowedArguments = new Set(['--production', '--accounts-enabled', '--signup-enabled']);
 for (const argument of argumentsSet) {
-  if (!allowedArguments.has(argument)) throw new Error(`Unknown staging option: ${argument}`);
+  if (!allowedArguments.has(argument)) throw new Error(`Unknown asset packaging option: ${argument}`);
 }
+const production = argumentsSet.has('--production');
+const outputDirectory = production ? '.production-assets' : '.staging-assets';
+const destination = path.join(workerRoot, outputDirectory);
 const accountsEnabled = argumentsSet.has('--accounts-enabled');
 const signupEnabled = argumentsSet.has('--signup-enabled');
-if (signupEnabled && !accountsEnabled) throw new Error('Staging signup requires --accounts-enabled.');
+if (signupEnabled && !accountsEnabled) throw new Error('Signup requires --accounts-enabled.');
 
 // A public allowlist prevents backend sources, migrations, tests, documentation,
 // dependencies, environment files and Git metadata from becoming website assets.
@@ -60,17 +62,18 @@ await copyPublicDirectory('spinarium', (file) => siteExtensions.has(path.extname
 const publicConfig = {
   previewEnabled: false,
   backend: 'cloudflare',
+  authProvider: 'password',
   signupEnabled,
-  // Until the secure provider is configured, the UI shows account unavailability
-  // and disables its sign-in action. /api/health remains available for staging.
+  // These switches must match the separately verified backend configuration.
+  // When accounts are disabled, the UI fails closed and health remains available.
   apiBase: accountsEnabled ? '/api' : '',
   supabaseUrl: '',
   supabasePublishableKey: '',
 };
-const configModule = `// Generated staging-only public switches. Contains no credentials.\nexport const spinariumConfig = Object.freeze(${JSON.stringify(publicConfig, null, 2)});\n`;
+const configModule = `// Generated ${production ? 'production' : 'staging'} public switches. Contains no credentials.\nexport const spinariumConfig = Object.freeze(${JSON.stringify(publicConfig, null, 2)});\n`;
 await writeFile(path.join(destination, 'spinarium/config.js'), configModule);
-const stagingHeaders = '/*\n  X-Robots-Tag: noindex, nofollow\n\n/spinarium/config.js\n  Cache-Control: no-store\n';
-await writeFile(path.join(destination, '_headers'), stagingHeaders);
+const assetHeaders = `/*\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  Referrer-Policy: strict-origin-when-cross-origin\n${production ? '' : '  X-Robots-Tag: noindex, nofollow\n'}\n/spinarium/config.js\n  Cache-Control: no-store\n`;
+await writeFile(path.join(destination, '_headers'), assetHeaders);
 fileCount += 2;
-byteCount += Buffer.byteLength(configModule) + Buffer.byteLength(stagingHeaders);
-console.log(JSON.stringify({ directory: '.staging-assets', files: fileCount, bytes: byteCount, accountsEnabled, signupEnabled }));
+byteCount += Buffer.byteLength(configModule) + Buffer.byteLength(assetHeaders);
+console.log(JSON.stringify({ directory: outputDirectory, files: fileCount, bytes: byteCount, accountsEnabled, signupEnabled }));

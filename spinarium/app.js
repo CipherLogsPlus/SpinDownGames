@@ -20,6 +20,7 @@ import {
 
 // Preview is explicitly selected; provider failures never fall back to it.
 const preview = spinariumConfig.previewEnabled === true;
+const passwordProvider = !preview && spinariumConfig.authProvider === "password";
 document.body.classList.toggle("static-preview", preview);
 const adapters = preview ? createPreviewAccess() : null;
 const auth = adapters?.auth ?? createAuthClient(spinariumConfig);
@@ -75,19 +76,33 @@ function setAuthMode(mode) {
   const signup = authMode === "signup";
   $("#auth-title").textContent = signup ? "Begin your Spinarium" : "Enter your Spinarium";
   $("#auth-description").textContent = signup
-    ? "Create your account using the secure account service. Verify your email before signing in. Your collection begins empty."
-    : "Continue to secure email and password sign-in. Password recovery is available there.";
+    ? "Create your Spinarium account. Your collection begins empty."
+    : "Sign in with your email address and password to open your collection.";
   $("#auth-submit").textContent = signup ? "Create account" : "Sign in";
-  $("#auth-email").closest(".auth-field").hidden = !preview;
-  $("#auth-email").disabled = !preview;
-  $("#auth-email").required = preview;
-  $("#auth-password-group").hidden = !preview;
-  $("#auth-password").disabled = !preview;
-  $("#auth-password").required = preview;
-  $("#auth-password").minLength = 1;
-  $("#auth-confirm-group").hidden = true;
-  $("#auth-confirm-password").disabled = true;
-  $("#auth-confirm-password").required = false;
+  const credentialsVisible = preview || passwordProvider;
+  $("#auth-display-name-group").hidden = !signup;
+  $("#auth-display-name").disabled = !signup;
+  $("#auth-display-name").required = signup;
+  $("#auth-email").closest(".auth-field").hidden = !credentialsVisible;
+  $("#auth-email").disabled = !credentialsVisible;
+  $("#auth-email").required = credentialsVisible;
+  $("#auth-email").type = preview ? "text" : "email";
+  $("#auth-email").maxLength = preview ? 320 : 254;
+  $("label[for='auth-email']").textContent = preview ? "Username" : "Email address";
+  $("#auth-password-group").hidden = !credentialsVisible;
+  $("#auth-password").disabled = !credentialsVisible;
+  $("#auth-password").required = credentialsVisible;
+  $("#auth-password").minLength = passwordProvider ? 15 : 1;
+  $("#auth-password").maxLength = passwordProvider ? 256 : 4096;
+  $("#auth-password").autocomplete = signup ? "new-password" : "current-password";
+  $("#auth-password-hint").hidden = !signup;
+  if (signup) $("#auth-password").setAttribute("aria-describedby", "auth-password-hint");
+  else $("#auth-password").removeAttribute("aria-describedby");
+  $("#auth-confirm-group").hidden = !signup;
+  $("#auth-confirm-password").disabled = !signup;
+  $("#auth-confirm-password").required = signup;
+  $("#auth-confirm-password").maxLength = passwordProvider ? 256 : 4096;
+  $("#auth-recovery-note").hidden = !passwordProvider;
   $("#forgot-password").hidden = true;
   $("#signup-tab").hidden = !signupEnabled;
   $("#guest-tools a[href='#signup']").hidden = !signupEnabled;
@@ -112,7 +127,7 @@ function setAuthMode(mode) {
     $("#auth-submit").textContent = "Log in";
   } else {
     $(".auth-policy").replaceChildren(
-      document.createTextNode("By signing in, you agree to the "),
+      document.createTextNode(signup ? "By creating an account, you agree to the " : "By signing in, you agree to the "),
       Object.assign(el("a", "", "Terms"), { href: "../terms.html" }),
       document.createTextNode(" and acknowledge the "),
       Object.assign(el("a", "", "Privacy Policy"), { href: "../privacy.html" }),
@@ -381,15 +396,22 @@ $("#claim-open").addEventListener("click", (event) => {
 $("#auth-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!auth.configured || state.authBusy) return;
+  const accountDetails = {
+    email: $("#auth-email").value,
+    password: $("#auth-password").value,
+    ...(authMode === "signup" ? { displayName: $("#auth-display-name").value } : {}),
+  };
+  if (authMode === "signup" && accountDetails.password !== $("#auth-confirm-password").value) {
+    clearPasswords();
+    feedback("The passwords do not match. Please enter them again.", true);
+    return;
+  }
   state.authBusy = true;
   $("#auth-fields").disabled = true;
   feedback("Please wait…");
   try {
-    if (preview) await auth.signIn({
-      email: $("#auth-email").value, password: $("#auth-password").value,
-    });
-    else if (authMode === "signup") await auth.signUp();
-    else await auth.signIn();
+    if (authMode === "signup") await auth.signUp(accountDetails);
+    else await auth.signIn(accountDetails);
   } catch (error) {
     feedback(
       preview
@@ -400,12 +422,13 @@ $("#auth-form").addEventListener("submit", async (event) => {
       true,
     );
   } finally {
+    accountDetails.password = "";
     clearPasswords();
     state.authBusy = false;
     $("#auth-fields").disabled = !auth.configured;
   }
 });
-$("#sign-out").addEventListener("click", async () => {
+async function signOut() {
   try {
     await auth.signOut();
     feedback("You have signed out.");
@@ -414,7 +437,9 @@ $("#sign-out").addEventListener("click", async () => {
       "You have signed out on this page. The account service could not confirm session revocation.",
     );
   }
-});
+}
+$("#sign-out").addEventListener("click", signOut);
+$("#menu-sign-out").addEventListener("click", signOut);
 $("#collection-search").addEventListener("input", (event) => {
   if (!state.snapshot) return;
   state.query.search = event.currentTarget.value;

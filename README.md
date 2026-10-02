@@ -29,9 +29,9 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 - `assets/coin.glb` and `assets/coin-poster.webp`: existing coin geometry and still preview.
 - `assets/fonts/`: Anton and DM Sans, distributed with their SIL Open Font Licenses.
 - `scripts/verify.cjs`: browser checks for interactions, responsive layout, accessibility, and fallbacks.
-- `spinarium/`: separate cinematic collection area at `/spinarium/`, with reusable native modules, an explicit empty frontend preview (`admin` / `1234`), plain black slots, and disabled physical-card registration. Preview access is not real authentication or administrator authority. The homepage's **View Spinarium** button is its entry point.
-- `cloudflare/spinarium-worker/`: isolated Worker backend foundation with D1-native migrations, OIDC/server sessions, protected collector/admin APIs, and private R2 artwork. A disabled staging Worker/static site and D1 database are deployed; Auth0 email/password signup/login and R2 artwork remain unconfigured. Production hosting/DNS are preserved.
-- `docs/SPINARIUM-ACTIVATION.md`: short dashboard handoff for the remaining R2, Auth0 and production email prerequisites, with exact staging URLs and secure secret entry.
+- `spinarium/`: separate cinematic collection area at `/spinarium/`, with reusable native modules, an explicit empty development preview (`admin` / `1234`) in repository configuration, plain black slots, and disabled physical-card registration. Preview access is not real authentication or administrator authority. The homepage's **View Spinarium** button is its entry point.
+- `cloudflare/spinarium-worker/`: isolated Worker backend foundation with D1-native migrations, direct email/password authentication and server sessions, protected collector/admin APIs, and private R2 artwork. The production Worker/static site and dedicated D1 database are active. Direct signup/login and saved-data APIs passed hosted checks; final production browser verification is in progress. Private R2 artwork remains unconfigured; GitHub Pages and original DNS values remain available for rollback.
+- `docs/SPINARIUM-ACTIVATION.md`: current account activation status: direct Cloudflare signup/login, unverified identifiers, saved D1 records, no provider dashboard setup, and unavailable password recovery.
 - `docs/SPINARIUM-CLOUDFLARE.md`: the selected Cloudflare platform, actually verified connector/CLI access, and incremental staging/hosting migration gates. Retained Supabase adapters/schema and historical setup documents are superseded unused groundwork.
 - `docs/SPINARIUM-ARCHITECTURE.md`: Spinarium service boundary, domain relationships, and requirements for future authenticated ownership and secure claiming.
 - `assets/spinarium/`: replaceable original concept artwork with provenance; these images and the sample lore are not finalized canon.
@@ -57,15 +57,15 @@ When adding or updating an event, use this location markup inside its `.event-ca
 
 The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past event**, with its original booth ideas inside an expandable archive. Those ideas are not current offers or claims about activities that actually occurred. Review and archive events after their exact dates rather than using an evergreen “this Saturday” label.
 
-GitHub Pages publishes `main` from the repository root. Pushing to that branch deploys the site; verify the matching Pages build and public assets before calling a release live. This repository is separate from InvoHub and has no connection to private inventory or authentication.
+Cloudflare Worker `spinarium-production` serves the apex website and `/api/` accounts. GitHub Pages still publishes `main` from the repository root as fallback; pushing there does not deploy the production Worker. Use the separately generated production assets/configuration and verify the actual Worker revision after deployment. This repository is separate from InvoHub and has no connection to private inventory or authentication.
 
-Cloudflare Workers, D1 and R2 are the selected replacement infrastructure. Keep the existing Pages configuration, `CNAME` and live DNS until the complete replacement site and backend have passed hosted staging checks. The isolated backend package does not deploy through a Pages push. Real accounts, claims and administrator access remain inactive; the current preview creates no ownership.
+Cloudflare Workers, D1 and R2 are the selected replacement infrastructure. Keep the existing Pages configuration, `CNAME` and original DNS values for rollback until the complete replacement site and backend have passed hosted checks. The isolated backend package does not deploy through a Pages push. Direct password accounts were activated on October 2, 2026 at 17:30:54 UTC. Hosted API and original-site checks passed; final production browser checks are in progress. Claims and administrator grants remain inactive; repository preview access creates no ownership.
 
 ### Custom domain
 
-`CNAME` sets the GitHub Pages domain to `spindowngames.com`. Keep this file in future deployments. Canonical URLs and share metadata use `https://spindowngames.com/`; page, stylesheet, script, and asset links remain relative so they work at the domain root.
+`CNAME` preserves the GitHub Pages fallback domain `spindowngames.com`. Keep this file and the Pages deployment for rollback. Canonical URLs and share metadata use `https://spindowngames.com/`; page, stylesheet, script, and asset links remain relative so they work at the domain root.
 
-Cloudflare manages DNS. Configure these records with **DNS only** (gray cloud) and TTL **Auto**:
+Cloudflare manages DNS. The four apex A records are now **Proxied** (orange cloud), routing `spindowngames.com/*` to the production Worker while retaining the original GitHub Pages IP values. `www` remains **DNS only** (gray cloud). TTL remains Auto; Always Use HTTPS is enabled and the active Full SSL mode is unchanged. These retained origin values support rollback:
 
 | Type | Name | Content |
 | --- | --- | --- |
@@ -75,11 +75,11 @@ Cloudflare manages DNS. Configure these records with **DNS only** (gray cloud) a
 | A | @ | 185.199.111.153 |
 | CNAME | www | cipherlogsplus.github.io |
 
-These are the existing GitHub Pages deployment instructions, not a request to change live DNS during Cloudflare preparation. For initial Pages setup, add the domain to GitHub Pages before pointing these records at GitHub. Verify domain ownership through the GitHub account's Pages settings and keep its verification TXT record in Cloudflare. Once DNS is correct and GitHub has issued the certificate, enable Enforce HTTPS and check the apex, `www` redirect, old GitHub Pages URL, and all site pages. See [GitHub's custom-domain instructions](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site). Follow [the Cloudflare migration guide](docs/SPINARIUM-CLOUDFLARE.md) before replacing this working deployment.
+Do not turn the live apex records gray as part of routine edits. For a deliberate rollback, preserve D1 account/session data, restore the original site through the retained Pages origin, and follow [the deployment/rollback guide](docs/SPINARIUM-CLOUDFLARE.md). Keep the GitHub domain-verification TXT record and Pages HTTPS configuration. The original [GitHub custom-domain instructions](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) describe fallback setup.
 
 ## Website policies
 
-The policies describe the current informational site, GitHub Pages security logging, browser-only dice history, and links to external platforms. Contact uses the existing Instagram and Discord channels because no business email has been supplied. No registered entity name, postal address, retention deadline, governing jurisdiction, arbitration clause, or checkout/refund policy has been invented.
+The policies describe the informational site, hosting, browser-only dice history, links to external platforms and the active direct credential service, including saved email-shaped identifiers/password hashes and unavailable recovery. Contact uses the existing Instagram and Discord channels because no business email has been supplied. No registered entity name, postal address, retention deadline, governing jurisdiction, arbitration clause, or checkout/refund policy has been invented.
 
 Keep these pages aligned with actual practices. Revisit them before adding accounts, analytics, contact forms, newsletters, a shop, different hosting, or new data-sharing practices. Business-wide privacy duties and any future sales terms need a separate review of the relevant business details; publishing these pages is not a legal-compliance certification.
 

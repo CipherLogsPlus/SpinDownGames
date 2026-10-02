@@ -1,5 +1,5 @@
 // Browser checks intercept only local, test-only Worker responses. They do not
-// verify Auth0, Cloudflare account access, deployment, DNS, or hosted cookies.
+// verify Cloudflare account access, deployment, DNS, or hosted cookies.
 // NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify-spinarium.cjs
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -16,9 +16,11 @@ let passed = 0;
 const introKey = "spinarium.preview.introduction.v3";
 const fixtureCookie = "spinarium-browser-test-only-session";
 const fixtureCsrf = "spinarium_test_only_csrf_12345678901234567890";
+const fixturePassword = "Test-only-passphrase42!";
 const fixtureUser = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   displayName: "QA Collector",
+  email: "collector@example.test",
   memberSince: "2026-10-01T12:00:00Z",
   // Editable identity claims never grant a browser administrator authority.
   role: "superadmin", is_admin: true,
@@ -88,7 +90,7 @@ function assertNoDemoRequests(requests) {
 function assertNoSecretsInURLs(requests) {
   assert.deepEqual(requests.filter(({ url }) => {
     const parsed = new URL(url);
-    return [...parsed.searchParams.keys()].some((key) => /^(?:password|access_token|refresh_token|claim_code|claim_token)$/i.test(key)) || url.includes(fixtureCookie) || url.includes(fixtureCsrf);
+    return [...parsed.searchParams.keys()].some((key) => /^(?:password|access_token|refresh_token|claim_code|claim_token)$/i.test(key)) || url.includes(fixtureCookie) || url.includes(fixtureCsrf) || url.includes(fixturePassword);
   }), [], "A credential was placed in a request URL");
 }
 async function storage(page) {
@@ -126,7 +128,7 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
   if (signedIn) await context.addCookies([{ name: "spinarium_session", value: fixtureCookie, url: base, httpOnly: true, sameSite: "Lax" }]);
   await context.route("**/spinarium/config.js*", (route) => route.fulfill({
     status: 200, contentType: "text/javascript",
-    body: `export const spinariumConfig = Object.freeze(${JSON.stringify({ previewEnabled: false, backend: "cloudflare", apiBase, signupEnabled })});`,
+    body: `export const spinariumConfig = Object.freeze(${JSON.stringify({ previewEnabled: false, backend: "cloudflare", authProvider: "password", apiBase, signupEnabled })});`,
   }));
   await context.route("**/api/**", async (route) => {
     const request = route.request(), url = new URL(request.url()), method = request.method();
@@ -140,16 +142,31 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
       assert(headers.cookie?.includes(fixtureCookie));
       return respond({ user: fixtureUser, csrfToken: fixtureCsrf, expiresAt: new Date(Date.now() + 3600000).toISOString() });
     }
-    if (url.pathname === "/api/auth/login" && method === "GET") {
+    if (url.pathname === "/api/auth/login" && method === "POST") {
+      const body = request.postDataJSON();
+      assert.deepEqual(Object.keys(body).sort(), ["email", "password"]);
+      assert.equal(body.email, fixtureUser.email);
+      if (scenario === "invalid-login" || body.password !== fixturePassword)
+        return respond({ code: "INVALID_CREDENTIALS", message: `Private backend detail: ${body.password}` }, 401);
       state.signedIn = true;
-      return respond(null, 302, { location: "/spinarium/#dashboard", "set-cookie": `spinarium_session=${fixtureCookie}; Path=/; HttpOnly; SameSite=Lax` });
+      return respond({ user: fixtureUser, csrfToken: fixtureCsrf, expiresAt: new Date(Date.now() + 3600000).toISOString() }, 200,
+        { "set-cookie": `spinarium_session=${fixtureCookie}; Path=/; HttpOnly; SameSite=Lax` });
     }
-    if (url.pathname === "/api/auth/signup" && method === "GET") return respond(null, 302, { location: "/spinarium/?auth=verify-email#signin" });
+    if (url.pathname === "/api/auth/signup" && method === "POST") {
+      const body = request.postDataJSON();
+      assert.deepEqual(Object.keys(body).sort(), ["displayName", "email", "password"]);
+      assert.deepEqual(body, { email: fixtureUser.email, password: fixturePassword, displayName: fixtureUser.displayName });
+      if (scenario === "duplicate-signup")
+        return respond({ code: "ACCOUNT_UNAVAILABLE", message: `Private backend detail: ${body.password}` }, 400);
+      state.signedIn = true;
+      return respond({ user: fixtureUser, csrfToken: fixtureCsrf, expiresAt: new Date(Date.now() + 3600000).toISOString() }, 201,
+        { "set-cookie": `spinarium_session=${fixtureCookie}; Path=/; HttpOnly; SameSite=Lax` });
+    }
     if (url.pathname === "/api/auth/logout" && method === "POST") {
       assert.equal(headers["x-csrf-token"], fixtureCsrf);
       assert.equal(request.postData(), "{}");
       state.signedIn = false;
-      return respond(null, 204, { "set-cookie": "spinarium_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
+      return respond({ signedOut: true }, 200, { "set-cookie": "spinarium_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
     }
     if (!state.signedIn) return respond({ error: "UNAUTHORIZED" }, 401);
     assert(headers.cookie?.includes(fixtureCookie));
@@ -192,8 +209,8 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
   if (sessionResponse) await sessionResponse;
   await page.waitForLoadState("load");
   await page.waitForFunction(() => !document.body.classList.contains("static-preview") &&
-    document.querySelector("#auth-email")?.disabled &&
-    document.querySelector("#auth-password")?.disabled);
+    document.querySelector("#auth-email")?.type === "email" &&
+    !document.querySelector("#auth-password-group")?.hidden);
   if (signedIn && !["unavailable", "malformed"].includes(scenario)) {
     await page.waitForSelector("#hub-view:not([hidden])");
     await page.waitForFunction(() => !document.querySelector("#first-login-intro").open);
@@ -207,6 +224,20 @@ async function previewSignIn(page, password = "1234") {
   await page.locator("#auth-email").fill("admin");
   await page.locator("#auth-password").fill(password);
   await page.locator("#auth-password").press("Enter");
+}
+async function passwordSignIn(page, password = fixturePassword) {
+  await page.locator("#auth-email").fill(fixtureUser.email);
+  await page.locator("#auth-password").fill(password);
+  await page.locator("#auth-submit").click();
+}
+async function passwordSignup(page) {
+  await page.locator("#signup-tab").click();
+  await page.waitForFunction(() => location.hash === "#signup" && document.querySelector("#auth-submit").textContent === "Create account");
+  await page.locator("#auth-display-name").fill(fixtureUser.displayName);
+  await page.locator("#auth-email").fill(fixtureUser.email);
+  await page.locator("#auth-password").fill(fixturePassword);
+  await page.locator("#auth-confirm-password").fill(fixturePassword);
+  await page.locator("#auth-submit").click();
 }
 async function openCollection(page) {
   await page.locator('#hub-view a[href="#collection?filter=owned"]').click();
@@ -399,45 +430,97 @@ async function assertEmptyCollection(page, memberSince) {
       assert(await page.locator("#auth-view").isVisible());
       assert(await page.locator("#hub-view").isHidden());
       assert.deepEqual(calls.map((call) => [call.method, call.path]), [["GET", "/api/auth/session"]]);
-      assert(await page.locator("#auth-email").isHidden());
-      assert(await page.locator("#auth-password").isHidden());
-      assert(await page.locator("#auth-email").isDisabled());
-      assert(await page.locator("#auth-password").isDisabled());
+      assert(await page.locator("#auth-email").isVisible());
+      assert(await page.locator("#auth-password").isVisible());
+      assert(await page.locator("#auth-email").isEnabled());
+      assert(await page.locator("#auth-password").isEnabled());
       assert.equal(await page.locator("#auth-submit").innerText(), "Sign in");
       assert(await page.locator("#signup-tab").isHidden());
       assert(await page.locator("#forgot-password").isHidden());
       await assertBlankCards(page, "#auth-view", 3);
+      assert(await page.locator("#auth-recovery-note").isVisible());
+      assert.match(await page.locator("#auth-recovery-note").innerText(), /Password reset is not available yet/);
       await checkAxe(page);
     });
-    await test("enabled registration uses hosted signup and returns safe email-verification feedback", async () => {
+    for (const width of [320, 390]) for (const scale of [100, 200])
+      await test(`password sign-in entry fits ${width}px at ${scale}% text`, () => checkOverflow(page, width, scale));
+    await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+    await test("password sign-in entry WCAG 2.1 AA on mobile", async () => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await checkAxe(page);
+      await page.setViewportSize({ width: 1280, height: 900 });
+    });
+    await test("direct registration creates a cookie session immediately with an empty collection and no email verification step", async () => {
       const fixture = await createFixture(browser, { signupEnabled: true }); contexts.push(fixture.context);
       assert(await fixture.page.locator("#signup-tab").isVisible());
       await fixture.page.locator("#signup-tab").click();
       await fixture.page.waitForFunction(() => location.hash === "#signup" && document.querySelector("#auth-submit").textContent === "Create account");
-      assert.equal(await fixture.page.locator("#auth-submit").innerText(), "Create account");
-      assert(await fixture.page.locator("#auth-email").isHidden());
-      assert(await fixture.page.locator("#auth-password").isHidden());
-      assert(await fixture.page.locator("#auth-confirm-password").isHidden());
-      await fixture.page.locator("#auth-submit").click();
-      await fixture.page.waitForFunction(() => document.querySelector("#auth-feedback").textContent.includes("Verify your email address"));
-      assert(fixture.calls.some((call) => call.path === "/api/auth/signup" && call.method === "GET"));
-      assert(!fixture.calls.some((call) => call.path === "/api/dashboard"));
-      assert(await fixture.page.locator("#auth-view").isVisible());
-      assert(!new URL(fixture.page.url()).searchParams.has("auth"));
+      for (const id of ["auth-display-name", "auth-email", "auth-password", "auth-confirm-password"])
+        assert(await fixture.page.locator(`#${id}`).isVisible());
+      assert(await fixture.page.locator("#auth-password-hint").isVisible());
+      assert.match(await fixture.page.locator("#auth-password-hint").innerText(), /15 to 128/);
+      await checkOverflow(fixture.page, 390, 200);
+      await fixture.page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+      await checkAxe(fixture.page);
+      await fixture.page.setViewportSize({ width: 1280, height: 900 });
+      await passwordSignup(fixture.page);
+      await fixture.page.waitForSelector("#hub-view:not([hidden])");
+      await fixture.page.waitForFunction(() => !document.querySelector("#first-login-intro").open);
+      assert(fixture.calls.some((call) => call.path === "/api/auth/signup" && call.method === "POST"));
+      assert.equal(await fixture.page.locator("#auth-password").inputValue(), "");
+      assert.equal(await fixture.page.locator("#auth-confirm-password").inputValue(), "");
+      assert.equal(await fixture.page.locator("#profile-name").innerText(), fixtureUser.displayName);
+      assert.doesNotMatch(await fixture.page.locator("body").innerText(), /verify your email|confirmation link/i);
+      await openCollection(fixture.page);
+      await assertEmptyCollection(fixture.page, "2026");
       await assertNoBrowserCredentials(fixture.page);
     });
-    await test("failed provider callback exposes only an allowlisted notice and removes it from the URL", async () => {
-      const fixture = await createFixture(browser); contexts.push(fixture.context);
-      await fixture.page.goto(`${base}/spinarium/?auth=failed#signin`, { waitUntil: "networkidle" });
-      assert.match(await fixture.page.locator("#auth-feedback").innerText(), /Sign-in could not be completed/);
-      assert(!new URL(fixture.page.url()).searchParams.has("auth"));
+    await test("incorrect password stays gated, clears submitted credentials, and hides backend detail", async () => {
+      const fixture = await createFixture(browser, { scenario: "invalid-login" }); contexts.push(fixture.context);
+      await passwordSignIn(fixture.page);
+      await fixture.page.waitForFunction(() => document.querySelector("#auth-feedback").textContent.includes("Sign-in failed"));
       assert(await fixture.page.locator("#auth-view").isVisible());
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      assert.equal(await fixture.page.locator("#auth-password").inputValue(), "");
+      assert.doesNotMatch(await fixture.page.locator("#auth-feedback").innerText(), /Private backend|Test-only-passphrase/);
       assert(!fixture.calls.some((call) => call.path === "/api/dashboard"));
+      await assertNoBrowserCredentials(fixture.page);
+    });
+    await test("signup validation and duplicate rejection clear passwords without granting access", async () => {
+      const fixture = await createFixture(browser, { signupEnabled: true, scenario: "duplicate-signup" }); contexts.push(fixture.context);
+      await fixture.page.locator("#signup-tab").click();
+      await fixture.page.waitForFunction(() => location.hash === "#signup" && document.querySelector("#auth-submit").textContent === "Create account");
+      await fixture.page.locator("#auth-display-name").fill(fixtureUser.displayName);
+      await fixture.page.locator("#auth-email").fill(fixtureUser.email);
+      await fixture.page.locator("#auth-password").fill(fixturePassword);
+      await fixture.page.locator("#auth-confirm-password").fill("Mismatched-test-password42!");
+      await fixture.page.locator("#auth-submit").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#auth-feedback").textContent.includes("passwords do not match"));
+      assert(!fixture.calls.some((call) => call.path === "/api/auth/signup"));
+      for (const value of ["short-password", "x".repeat(129)]) {
+        await fixture.page.locator("#auth-password").fill(value);
+        await fixture.page.locator("#auth-confirm-password").fill(value);
+        // Bypass native validity to also verify the adapter's character bounds.
+        await fixture.page.evaluate(() => document.querySelector("#auth-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+        await fixture.page.waitForFunction(() => document.querySelector("#auth-password").value === "");
+        assert.match(await fixture.page.locator("#auth-feedback").innerText(), /15 to 128/);
+        assert(!fixture.calls.some((call) => call.path === "/api/auth/signup"));
+      }
+      await passwordSignup(fixture.page);
+      await fixture.page.waitForFunction(() => document.querySelector("#auth-feedback").textContent.includes("account could not be created"));
+      assert(await fixture.page.locator("#auth-view").isVisible());
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      assert.equal(await fixture.page.locator("#auth-password").inputValue(), "");
+      assert.equal(await fixture.page.locator("#auth-confirm-password").inputValue(), "");
+      assert.doesNotMatch(await fixture.page.locator("#auth-feedback").innerText(), /Private backend|Test-only-passphrase/);
+      assert(!fixture.calls.some((call) => call.path === "/api/dashboard"));
+      await assertNoBrowserCredentials(fixture.page);
     });
     await test("sign-in follows the Worker boundary and hydrates an empty cookie session without browser tokens", async () => {
-      await page.locator("#auth-submit").click();
+      await passwordSignIn(page);
       await page.waitForSelector("#hub-view:not([hidden])");
-      assert(calls.some((call) => call.path === "/api/auth/login" && call.method === "GET"));
+      assert(calls.some((call) => call.path === "/api/auth/login" && call.method === "POST"));
+      assert.equal(await page.locator("#auth-password").inputValue(), "");
       assert(calls.some((call) => call.path === "/api/dashboard" && call.method === "GET"));
       assert(calls.some((call) => call.path === "/api/admin/access" && call.method === "GET"));
       assert(calls.filter((call) => ["/api/dashboard", "/api/admin/access"].includes(call.path)).every((call) => !call.authorization && call.cookie.includes(fixtureCookie)));
@@ -448,9 +531,21 @@ async function assertEmptyCollection(page, memberSince) {
       assertNoDemoRequests(observed.requests);
       assertNoSecretsInURLs(observed.requests);
     });
+    await test("reload restores the same cookie identity without resubmitting a password", async () => {
+      const loginCount = calls.filter((call) => call.path === "/api/auth/login").length;
+      const restoredSession = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/session");
+      await page.reload({ waitUntil: "commit" });
+      await restoredSession;
+      await page.waitForSelector("#dashboard-view:not([hidden])");
+      assert.equal(calls.filter((call) => call.path === "/api/auth/login").length, loginCount);
+      assert.equal(await page.locator("#profile-name").innerText(), fixtureUser.displayName);
+      assert.equal(await page.locator("#auth-password").inputValue(), "");
+      await assertEmptyCollection(page, "2026");
+      await assertNoBrowserCredentials(page);
+    });
     await test("real account first entry keeps reduced-motion onboarding, and later entries remember only the browser preference", async () => {
       const fixture = await createFixture(browser); contexts.push(fixture.context);
-      await fixture.page.locator("#auth-submit").click();
+      await passwordSignIn(fixture.page);
       await fixture.page.waitForSelector("#first-login-intro[open]");
       assert.equal(await fixture.page.locator("#first-login-intro").getAttribute("data-reduced"), "true");
       assert.equal(await fixture.page.locator('#first-login-intro button').filter({ hasText: /skip/i }).count(), 0);
@@ -468,7 +563,7 @@ async function assertEmptyCollection(page, memberSince) {
       assert(await fixture.page.locator("#auth-view").isVisible());
       assert(await fixture.page.locator("#hub-view").isHidden());
       assert.equal(await fixture.page.evaluate((key) => localStorage.getItem(key), introKey), "seen");
-      await fixture.page.locator("#auth-submit").click();
+      await passwordSignIn(fixture.page);
       await fixture.page.waitForSelector("#hub-view:not([hidden])");
       assert(!(await fixture.page.locator("#first-login-intro").evaluate((node) => node.open)));
       await openCollection(fixture.page);
@@ -478,7 +573,7 @@ async function assertEmptyCollection(page, memberSince) {
     await test("real account normal-motion entry preserves the voiced cinematic and automatically docks the ribbon", async () => {
       const fixture = await createFixture(browser, { reducedMotion: "no-preference", mockSpeech: true }); contexts.push(fixture.context);
       fixture.page.setDefaultTimeout(12000);
-      await fixture.page.locator("#auth-submit").click();
+      await passwordSignIn(fixture.page);
       await fixture.page.waitForSelector('#first-login-intro[data-phase="dark"][open]');
       assert.equal(await fixture.page.locator("#first-login-intro").getAttribute("data-reduced"), "false");
       assert.equal(await fixture.page.locator('#first-login-intro button').filter({ hasText: /skip/i }).count(), 0);
@@ -522,6 +617,26 @@ async function assertEmptyCollection(page, memberSince) {
       assert(await page.locator("#auth-view").isVisible());
       assert(await page.locator("#hub-view").isHidden());
       await assertNoBrowserCredentials(page);
+    });
+    await test("mobile Menu exposes keyboard sign-out, revokes the cookie, and clears private content", async () => {
+      const fixture = await createFixture(browser, { signedIn: true }); contexts.push(fixture.context);
+      await fixture.page.setViewportSize({ width: 390, height: 844 });
+      assert(await fixture.page.locator("#menu-sign-out").isHidden());
+      await fixture.page.locator("#navigation-toggle").click();
+      assert(await fixture.page.locator("#menu-sign-out").isVisible());
+      await fixture.page.locator("#menu-sign-out").focus();
+      assert(await fixture.page.locator("#menu-sign-out").evaluate((node) => node === document.activeElement));
+      await fixture.page.keyboard.press("Enter");
+      await fixture.page.waitForFunction(() => document.querySelector("#auth-feedback").textContent.includes("signed out"));
+      const logout = fixture.calls.find((call) => call.path === "/api/auth/logout");
+      assert.equal(logout?.method, "POST");
+      assert.equal(logout?.csrf, fixtureCsrf);
+      assert(await fixture.page.locator("#auth-view").isVisible());
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      assert.equal(await fixture.page.locator("#collection-grid").innerText(), "");
+      assert.equal(await fixture.page.locator("#navigation-toggle").getAttribute("aria-expanded"), "false");
+      assert.equal((await fixture.context.cookies()).filter((cookie) => cookie.name === "spinarium_session").length, 0);
+      await assertNoBrowserCredentials(fixture.page);
     });
     for (const scenario of ["unavailable", "malformed"]) await test(`${scenario} session fails closed and does not expose provider details or sample content`, async () => {
       const fixture = await createFixture(browser, { scenario }); contexts.push(fixture.context);

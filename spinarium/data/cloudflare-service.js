@@ -72,7 +72,7 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
   function captureIdentity() {
     if (connection.error) throw new SpinariumServiceError("CONFIGURATION_REQUIRED");
     const session = auth.getSession();
-    if (!session?.user?.id || session.flow !== "oidc") throw new SpinariumServiceError("AUTH_REQUIRED");
+    if (!session?.user?.id || session.flow !== "password") throw new SpinariumServiceError("AUTH_REQUIRED");
     return session;
   }
   function assertIdentity(identity) {

@@ -13,8 +13,12 @@ const MESSAGES = Object.freeze({
   PROVIDER_ERROR: "The account service could not complete this request. Please try again.",
   UNAVAILABLE: "Secure accounts are not available yet. Please check back soon.",
   UNSUPPORTED: "Account registration and password changes are not available here yet.",
-  EMAIL_UNVERIFIED: "Verify your email address using the email from the account service, then sign in.",
   SIGN_IN_FAILED: "Sign-in could not be completed. Please try again.",
+  INVALID_EMAIL: "Enter a valid email address.",
+  INVALID_PASSWORD: "Use a password with 15 to 128 characters.",
+  INVALID_INPUT: "Check your account details and try again.",
+  INVALID_CREDENTIALS: "Sign-in failed. Check your email and password.",
+  ACCOUNT_UNAVAILABLE: "The account could not be created. Try signing in or use different account details.",
   CANCELLED: "The account request was cancelled.",
 });
 
@@ -36,11 +40,11 @@ export function cloudflareConnection(config) {
 
 function publicUser(value) {
   if (!value || !UUID.test(value.id) || typeof value.displayName !== "string" ||
-    !value.displayName.trim() || value.displayName.length > 120)
+    !value.displayName.trim() || Array.from(value.displayName).length > 120)
     throw new AuthError("PROVIDER_ERROR");
   const user = { id: value.id, displayName: value.displayName };
   if (value.email != null) {
-    if (typeof value.email !== "string" || value.email.length > 320 ||
+    if (typeof value.email !== "string" || value.email.length > 254 ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email))
       throw new AuthError("PROVIDER_ERROR");
     user.email = value.email;
@@ -50,12 +54,28 @@ function publicUser(value) {
   return Object.freeze(user);
 }
 
+function credentials(input, signup = false) {
+  const email = typeof input?.email === "string" ? input.email.trim().toLowerCase() : "";
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    /[\u0000-\u001f\u007f]/.test(email) || /[\uD800-\uDFFF]/u.test(email)) throw new AuthError("INVALID_EMAIL");
+  const password = input?.password;
+  if (typeof password !== "string" || Array.from(password).length < 15 ||
+    Array.from(password).length > 128 || new TextEncoder().encode(password).byteLength > 512 ||
+    !password.trim() || /[\uD800-\uDFFF]/u.test(password))
+    throw new AuthError(signup ? "INVALID_PASSWORD" : "INVALID_CREDENTIALS");
+  if (!signup) return { email, password };
+  const displayName = typeof input.displayName === "string" ? input.displayName.trim() : "";
+  if (!displayName || Array.from(displayName).length > 120 ||
+    /[\u0000-\u001f\u007f]/.test(displayName) || /[\uD800-\uDFFF]/u.test(displayName)) throw new AuthError("INVALID_INPUT");
+  return { email, password, displayName };
+}
+
 export function createAuthClient(config, {
   fetchImpl = globalThis.fetch,
-  navigate = (path) => globalThis.location.assign(path),
   now = Date.now,
 } = {}) {
-  const connection = cloudflareConnection(config);
+  const connection = config?.authProvider === "password"
+    ? cloudflareConnection(config) : { error: "INVALID_CONFIGURATION" };
   const listeners = new Set();
   let current = null;
   let operation = 0;
@@ -68,10 +88,11 @@ export function createAuthClient(config, {
     }
   }
   function clearSession() {
+    const hadSession = current !== null;
     current = null;
     if (expiryTimer !== null) globalThis.clearTimeout(expiryTimer);
     expiryTimer = null;
-    notify();
+    if (hadSession) notify();
   }
   function invalidateSession() { ++operation; clearSession(); }
   function getSession() {
@@ -82,8 +103,9 @@ export function createAuthClient(config, {
     if (connection.error) throw new AuthError(connection.error);
     if (typeof fetchImpl !== "function") throw new AuthError("NETWORK_ERROR");
   }
-  async function request(path, { method = "GET", signal, csrfToken } = {}) {
+  async function request(path, { method = "GET", signal, csrfToken, body = {} } = {}) {
     assertConfigured();
+    if (signal?.aborted) throw new AuthError("CANCELLED");
     let response;
     try {
       response = await fetchImpl(`${connection.base}/auth${path}`, {
@@ -91,17 +113,26 @@ export function createAuthClient(config, {
         cache: "no-store", redirect: "error", referrerPolicy: "same-origin",
         headers: {
           Accept: "application/json",
-          ...(method === "POST" ? { "Content-Type": "application/json", "x-csrf-token": csrfToken } : {}),
+          ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+          ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
         },
-        ...(method === "POST" ? { body: "{}" } : {}),
+        ...(method === "POST" ? { body: JSON.stringify(body) } : {}),
         ...(signal ? { signal } : {}),
       });
     } catch { throw new AuthError(signal?.aborted ? "CANCELLED" : "NETWORK_ERROR"); }
     if (!response || typeof response.ok !== "boolean") throw new AuthError("PROVIDER_ERROR");
-    if (response.status === 401) return null;
+    if (response.status === 401) {
+      if (path === "/session" || path === "/logout") return null;
+      throw new AuthError("INVALID_CREDENTIALS");
+    }
     if (response.status === 429) throw new AuthError("RATE_LIMITED");
     if (response.status === 503) throw new AuthError("UNAVAILABLE");
-    // Never expose a provider response body, callback, or credential in errors.
+    if (response.status === 400) {
+      let code;
+      try { code = (await response.json())?.code; } catch { /* Only safe machine codes are read. */ }
+      throw new AuthError(code === "ACCOUNT_UNAVAILABLE" ? "ACCOUNT_UNAVAILABLE" : "INVALID_INPUT");
+    }
+    // Never expose a backend response body or submitted credential in errors.
     if (!response.ok) throw new AuthError("PROVIDER_ERROR");
     if (response.status === 204) return null;
     let data;
@@ -111,42 +142,48 @@ export function createAuthClient(config, {
   }
   async function refreshSession({ signal } = {}) {
     const version = ++operation;
-    let data;
     try {
-      data = await request("/session", { signal });
-      if (version !== operation || signal?.aborted) throw new AuthError("CANCELLED");
-      if (!data) { clearSession(); return null; }
-      const user = publicUser(data.user);
-      const expiresAt = typeof data.expiresAt === "string" ? Date.parse(data.expiresAt) : NaN;
-      if (!CSRF.test(data.csrfToken) || !Number.isFinite(expiresAt)) throw new AuthError("PROVIDER_ERROR");
-      if (expiresAt <= now()) throw new AuthError("SESSION_EXPIRED");
-      if (expiryTimer !== null) globalThis.clearTimeout(expiryTimer);
-      const session = Object.freeze({ user, flow: "oidc", expiresAt });
-      current = { session, csrfToken: data.csrfToken };
-      expiryTimer = globalThis.setTimeout(() => {
-        if (current?.session === session) invalidateSession();
-      }, Math.min(expiresAt - now(), 2_147_483_647));
-      expiryTimer?.unref?.();
-      notify();
-      return session;
+      return adopt(await request("/session", { signal }), version, signal);
     } catch (error) {
       if (version === operation) clearSession();
       throw error;
     }
   }
-  async function redirectTo(path, { signal } = {}) {
-    assertConfigured();
-    if (signal?.aborted) throw new AuthError("CANCELLED");
-    invalidateSession();
-    try { navigate(`${connection.base}/auth/${path}`); }
-    catch { throw new AuthError("NETWORK_ERROR"); }
-    return { redirecting: true };
+  function adopt(data, version, signal) {
+    if (version !== operation || signal?.aborted) throw new AuthError("CANCELLED");
+    if (!data) { clearSession(); return null; }
+    const user = publicUser(data.user);
+    const expiresAt = typeof data.expiresAt === "string" ? Date.parse(data.expiresAt) : NaN;
+    if (!CSRF.test(data.csrfToken) || !Number.isFinite(expiresAt)) throw new AuthError("PROVIDER_ERROR");
+    if (expiresAt <= now()) throw new AuthError("SESSION_EXPIRED");
+    if (expiryTimer !== null) globalThis.clearTimeout(expiryTimer);
+    const session = Object.freeze({ user, flow: "password", expiresAt });
+    current = { session, csrfToken: data.csrfToken };
+    expiryTimer = globalThis.setTimeout(() => {
+      if (current?.session === session) invalidateSession();
+    }, Math.min(expiresAt - now(), 2_147_483_647));
+    expiryTimer?.unref?.();
+    notify();
+    return session;
   }
-  async function signIn(options) { return redirectTo("login", options); }
+  async function authenticate(path, input, signup = false) {
+    assertConfigured();
+    const version = ++operation;
+    clearSession();
+    try {
+      const body = credentials(input, signup);
+      const data = await request(path, { method: "POST", body, signal: input?.signal });
+      return adopt(data, version, input?.signal);
+    } catch (error) {
+      if (version === operation) clearSession();
+      throw error;
+    }
+  }
+  async function signIn(options) { return authenticate("/login", options); }
   async function signUp(options) {
     assertConfigured();
     if (config.signupEnabled !== true) throw new AuthError("UNSUPPORTED");
-    return redirectTo("signup", options);
+    return authenticate("/signup", options, true);
   }
   async function signOut() {
     const csrfToken = current?.csrfToken;
@@ -155,26 +192,18 @@ export function createAuthClient(config, {
     await request("/logout", { method: "POST", csrfToken });
   }
   async function consumeAuthCallback(options = {}) {
-    let notice = null;
     const callbackUrl = options.url || globalThis.location?.href;
     if (callbackUrl) {
       let callback;
       try { callback = new URL(callbackUrl); } catch { throw new AuthError("SIGN_IN_FAILED"); }
       if (callback.searchParams.has("auth")) {
-        const values = callback.searchParams.getAll("auth");
-        if (values.length === 1) notice = values[0];
         callback.searchParams.delete("auth");
         const replace = options.replaceUrl || ((cleanUrl) => globalThis.history.replaceState(null, "", cleanUrl));
         try { replace(callback.href); } catch { throw new AuthError("SIGN_IN_FAILED"); }
       }
     }
-    // These allowlisted notices provide feedback only. They cannot authenticate
-    // a browser or replace server-side email verification/session authority.
-    if (notice === "verify-email") throw new AuthError("EMAIL_UNVERIFIED");
-    if (notice === "failed") throw new AuthError("SIGN_IN_FAILED");
     if (connection.error) return { handled: false, session: null, flow: null };
-    // The Worker consumes provider callbacks and redirects to /spinarium/.
-    // Reloading uses only the server session, never a token from the address.
+    // Reloading uses only the server session, never local storage or URL claims.
     const session = await refreshSession(options);
     return { handled: Boolean(session), session, flow: session?.flow || null };
   }

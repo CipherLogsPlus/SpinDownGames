@@ -119,6 +119,9 @@
           <a href="#admin" data-nav="admin" id="admin-nav" hidden
             ><span data-icon="settings"></span>Admin Studio</a
           >
+          <button id="menu-sign-out" type="button" class="menu-sign-out">
+            <span data-icon="arrow"></span>Sign out
+          </button>
         </nav>
         <div class="sidebar-story" aria-hidden="true">
           <div class="sigil">
@@ -171,6 +174,10 @@
             </div>
             <form id="auth-form">
               <fieldset id="auth-fields" disabled>
+                <div class="auth-field" id="auth-display-name-group" hidden>
+                  <label for="auth-display-name">Display name</label>
+                  <input id="auth-display-name" type="text" autocomplete="nickname" maxlength="240" disabled />
+                </div>
                 <div class="auth-field">
                   <label for="auth-email">Email address</label
                   ><input
@@ -190,6 +197,7 @@
                     maxlength="4096"
                     required
                   />
+                  <p id="auth-password-hint" class="form-feedback" hidden>Use 15 to 128 characters.</p>
                 </div>
                 <div class="auth-field" id="auth-confirm-group" hidden>
                   <label for="auth-confirm-password">Confirm password</label
@@ -218,6 +226,9 @@
             <a id="forgot-password" class="auth-text-link" href="#reset"
               >Forgot your password?</a
             >
+            <p id="auth-recovery-note" class="form-feedback" hidden>
+              Password reset is not available yet. Save your password in a password manager.
+            </p>
             <p class="auth-policy">
               By creating an account, you agree to the
               <a href="../terms.html">Terms</a> and acknowledge the

@@ -5,7 +5,7 @@ import type { Env } from "../src/types";
 export const origin = "https://spinarium.test";
 export async function createHarness(overrides: Partial<Env> = {}, outbound?: (request: Request) => Promise<Response>) {
   const bindings = {
-    AUTH_ENABLED: "true", SIGNUP_ENABLED: "false", APP_ORIGIN: origin,
+    AUTH_ENABLED: "true", AUTH_PROVIDER: "oidc", SIGNUP_ENABLED: "false", APP_ORIGIN: origin,
     OIDC_ISSUER: "https://identity.test", OIDC_CLIENT_ID: "spinarium-test",
     OIDC_CLIENT_SECRET: "test-only-provider-secret", AUTH0_CONNECTION: "Username-Password-Authentication", ...overrides,
   };
@@ -29,10 +29,11 @@ export async function createHarness(overrides: Partial<Env> = {}, outbound?: (re
   const env = await mf.getBindings<Env>();
   const db = env.DB;
   const r2 = env.ARTWORK;
-  const migration = await readFile(new URL("../migrations/0001_foundation.sql", import.meta.url), "utf8");
-  // D1 exec splits lines; preserve semicolons and use prepare for SQL triggers.
-  const statements = migration.split(/;\s*(?:\n|$)/).filter((statement) => statement.trim());
-  for (const statement of statements) await db.prepare(statement).run();
+  for (const file of ["0001_foundation.sql", "0002_password_accounts.sql"]) {
+    const migration = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
+    const statements = migration.split(/;\s*(?:\n|$)/).filter((statement) => statement.trim());
+    for (const statement of statements) await db.prepare(statement).run();
+  }
   return {
     mf, db, r2, env,
     fetch: (path: string, init: RequestInit = {}) => mf.dispatchFetch(new URL(path, origin), { ...init, redirect: "manual" }),

@@ -1,14 +1,14 @@
 # Spinarium architecture
 
-Cloudflare is the selected platform: Workers enforce authentication and permissions, D1 stores authoritative application records, and R2 stores protected artwork. The existing static HTML/CSS/native-module site still runs on GitHub Pages. Migration must preserve that working deployment until replacement hosting has been verified. A dedicated staging Worker, static site and D1 database are now deployed; hosted browser/account verification remains pending. R2 and Auth0 are unconfigured, and production hosting/DNS remain unchanged. See [activation](SPINARIUM-ACTIVATION.md).
+Cloudflare Workers serve the static website, authenticate accounts and enforce server-side permissions; D1 stores authoritative application records, and private R2 is reserved for artwork. Production Worker `spinarium-production` and its D1 database were activated October 2, 2026 at 17:30:54 UTC. Hosted API and original-site checks passed; final production browser verification is in progress. GitHub Pages, `CNAME` and original DNS origin values remain for rollback. R2 is unconfigured and does not block accounts. See [activation](SPINARIUM-ACTIVATION.md).
 
 The former Supabase architecture is preserved in [the historical document](history/SPINARIUM-ARCHITECTURE-SUPABASE-2026-10-01.md). Its provisioning and activation instructions are superseded; retained Supabase adapters and SQL are unused groundwork.
 
 ## Current presentation
 
-On the production/repository preview, `/spinarium/` opens the minimal “Spinarium login” screen. `admin` / `1234` is an explicit frontend preview, with no verified identity or administrative authority. The dashboard contains My Collection and Explore Veilings; other sections sit behind Menu. Collections start empty, decorative slots are black, and details open only after a card selection. Registration remains disabled. Catalog creation must never create ownership.
+Production `/spinarium/` opens actual email/password login/signup. The repository development config retains the explicit `admin` / `1234` preview; it supplies no production identity or administrator authority. The dashboard contains My Collection and Explore Veilings; other sections sit behind Menu. Collections start empty, decorative slots are black, and details open only after a card selection. Registration remains disabled. Catalog creation must never create ownership.
 
-The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Real account onboarding state is not implemented. The generated staging config disables preview/API access/signup until account setup is verified. Keep current artwork until the owner supplies a replacement draft. The planned space scene with a large purple Veil and no cube does not authorize an artwork change now.
+The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Real account onboarding state is not implemented. Generated staging and production configs disable preview and enable real `/api` password signup; the repository config retains the explicit development preview. Keep current artwork until the owner supplies a replacement draft. The planned space scene with a large purple Veil and no cube does not authorize an artwork change now.
 
 ## Code and service boundaries
 
@@ -18,21 +18,21 @@ The first-entry ribbon cinematic and browser speech remain. Later entries bypass
 | `spinarium/app.js` | UI composition and routing; UI state cannot establish backend authority. |
 | `spinarium/domain/` | Collection read contracts and pure display queries. |
 | `spinarium/data/preview-service.js` | Explicit empty frontend preview; no account, claim or ownership authority. |
-| `spinarium/config.js` | Public UI configuration; preview stays enabled, API access and signup stay disabled until backend and hosting checks pass. |
-| `spinarium/auth/cloudflare-auth.js`, `spinarium/data/cloudflare-service.js` | Cookie-session and protected API adapters, prepared without hosted activation. |
-| `cloudflare/spinarium-worker/` | Isolated Worker backend, D1 migrations, OIDC sessions, protected collector/admin APIs and R2 access. |
+| `spinarium/config.js` | Source development preview defaults; generated production configuration enables real signup and `/api` without preview. |
+| `spinarium/auth/cloudflare-auth.js`, `spinarium/data/cloudflare-service.js` | Active cookie-session and protected API adapters. |
+| `cloudflare/spinarium-worker/` | Isolated Worker backend, D1 migrations, direct password hashing/session management, protected collector/admin APIs and R2 access. |
 | `spinarium/auth/supabase-auth.js`, `spinarium/data/supabase-service.js`, `supabase/` | Retained legacy groundwork; not the selected production backend. |
 | `spinarium/data/demo-service.js` | Historical domain fixture, excluded from the public application. |
 
-The intended production boundary is same-origin `/api/` behind a Worker. D1 is private to trusted bindings, not exposed as a browser database API. D1 has its own SQLite schema; PostgreSQL roles, RLS policies and Supabase triggers are not portable permission enforcement. The Worker checks the session and administrator allowlist on each protected request, validates object access and accepted fields, and uses prepared SQL. Hiding UI controls is only presentation.
+The active production boundary is same-origin `/api/` behind a Worker. D1 is private to trusted bindings, not exposed as a browser database API. D1 has its own SQLite schema; PostgreSQL roles, RLS policies and Supabase triggers are not portable permission enforcement. The Worker checks the session and administrator allowlist on each protected request, validates object access and accepted fields, and uses prepared SQL. Hiding UI controls is only presentation.
 
 Collectors receive their own non-draft ownership and corresponding definitions. Names/lore/artwork are redacted until the server records discovery as revealed. Drafts are currently withheld; an approved revision/publication policy is required before real ownership issuance so catalog edits cannot hide purchased content. Unowned definitions, private serials and artwork are not supplied as hidden browser metadata. Administrators may manage the catalog and artwork but cannot issue ownership through catalog APIs. Discovery, achievements, claims and production authority require later dedicated server operations; no current browser endpoint awards them.
 
 ## Authentication and administration
 
-The owner selected Auth0 Universal Login with an email/password database connection. The isolated backend uses OIDC authorization code with PKCE and a server-managed opaque session. Authentication and signup are disabled by default; browser login/signup adapters are prepared but dormant. Tokens and provider credentials stay server-side; the browser receives a scoped Secure, HttpOnly cookie. Cookie mutations require same-origin/CSRF checks. OIDC issuer, audience, callback, state, nonce and verified identity are checked by the server using the maintained protocol library. The supported Auth0 configuration uses RS256 ID tokens, a confidential client with `client_secret_basic`, advertised PKCE S256, a fixed database connection and verified email before collector/session creation.
+The latest owner instruction selects direct credentials through Cloudflare Workers, with account data saved in D1. Earlier Auth0 setup and verified-email requirements are superseded. Email-shaped identifiers may be unverified/non-deliverable and never supply authority. The Worker validates signup/login, stores a salted slow scrypt password hash and issues an opaque Secure, HttpOnly cookie. Sessions expire after eight hours; mutations require same-origin/CSRF checks. No owner setup in external provider dashboards is required. The existing Spinarium dashboard/navigation/cinematic are preserved.
 
-Trusted operators provision administrator membership from an actually verified account in D1. Signup claims, email text, a first-user shortcut, profile metadata and browser flags cannot promote a collector. Account activation requires hosted provider/session verification and appropriate abuse limits; see [accounts](SPINARIUM-ACCOUNTS.md), [administration](SPINARIUM-ADMIN.md) and [migration](SPINARIUM-CLOUDFLARE.md).
+Trusted operators provision administrator membership only after confirming the exact saved account ID belongs to the owner. Email verification is not part of that authority. Signup input, unverified email text, a first-user shortcut, profile metadata and browser flags cannot promote a collector. Account activation requires hosted password/session verification and appropriate abuse limits; see [accounts](SPINARIUM-ACCOUNTS.md), [administration](SPINARIUM-ADMIN.md) and [migration](SPINARIUM-CLOUDFLARE.md).
 
 ## Product and authoritative records
 
@@ -62,4 +62,4 @@ Spinarium and InvoHub remain separate services. The browser never receives InvoH
 
 ## Verification
 
-Local Worker/D1 tests verify the implementation only in an isolated environment. Static browser checks verify the preview and preservation of the existing site. Neither proves hosted OIDC configuration, remote D1/R2 permissions, email delivery, DNS, certificates or replacement hosting. The [migration guide](SPINARIUM-CLOUDFLARE.md) lists staging and cutover gates; [VERIFICATION.md](../VERIFICATION.md) records actual completed checks separately from pending hosted work.
+Local Worker/D1 tests verify the implementation only in an isolated environment. Password credentials add `0002_password_accounts.sql`; passwords use versioned scrypt with random salts, while the email-shaped identifier is normalized and remains unverified. Password reset is unavailable for all accounts until email delivery and secure recovery exist. R2 is needed for artwork, not signup/login. Static browser checks verify the preview and preservation of the existing site. Neither proves hosted signup/login, remote D1/R2 permissions, email delivery, DNS, certificates or replacement hosting. The [migration guide](SPINARIUM-CLOUDFLARE.md) lists staging and cutover gates; [VERIFICATION.md](../VERIFICATION.md) records actual completed checks separately from pending hosted work.

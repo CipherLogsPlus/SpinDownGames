@@ -1,29 +1,9 @@
-# Activate Spinarium accounts
+# Spinarium accounts are live
 
-The staging site and D1 database are deployed at <https://spinarium-staging.cipherlogsplus.workers.dev/spinarium/>. Login/signup remain disabled while R2 and Auth0 are configured. The production website remains on GitHub Pages.
+Open <https://spindowngames.com/spinarium/> to sign up or log in. Accounts are handled directly by Cloudflare Workers and saved in D1; no Auth0 or Cloudflare dashboard setup is needed.
 
-1. **Enable R2.** Open [R2 in your Cloudflare account](https://dash.cloudflare.com/3c470b1087f06866d9c36d5f588fcbca/r2/overview) and complete its account setup. Cloudflare currently returns error `10042`. Once enabled, the private staging bucket and Worker binding can be completed; no API token needs to pass through chat.
+Use a display name, an email-shaped login identifier and a password of at least 15 characters. The address may be unverified or non-deliverable. Signup/login opens the preserved Spinarium home and empty collection, with an eight-hour protected session. New accounts receive no demo Veilings or administrator authority.
 
-2. **Set up Auth0.** Open [the Auth0 dashboard](https://manage.auth0.com/) and create a **Regular Web Application** for Spinarium staging. Enable only the selected email/password **Database** connection. Use **RS256** ID tokens and credentials **Client Secret (Basic)**. Record the connection's **name**, not its ID.
+Password reset is unavailable for every account until email delivery and secure recovery are implemented. R2 is reserved for private artwork and does not block signup/login. Claims remain disabled.
 
-| Auth0 field | Exact value |
-| --- | --- |
-| Allowed Callback URLs | `https://spinarium-staging.cipherlogsplus.workers.dev/api/auth/callback` |
-| Application Login URI / default login URL | `https://spinarium-staging.cipherlogsplus.workers.dev/spinarium/` |
-
-3. **Save the connection securely.** Open [the staging Worker's settings](https://dash.cloudflare.com/3c470b1087f06866d9c36d5f588fcbca/workers/services/view/spinarium-staging/production/settings), then **Variables and Secrets → Add**. Set the following values directly in Cloudflare, selecting **Secret** for the client secret. Select **Deploy** to save them. Keep `AUTH_ENABLED` and `SIGNUP_ENABLED` false until configuration is checked.
-
-| Worker setting | Value | Type |
-| --- | --- | --- |
-| `OIDC_ISSUER` | Your Auth0 tenant's exact HTTPS issuer, including its trailing slash. | Text |
-| `OIDC_CLIENT_ID` | The regular web application's client ID. | Text |
-| `AUTH0_CONNECTION` | The enabled database connection's name. | Text |
-| `OIDC_CLIENT_SECRET` | Copy directly from Auth0 into Cloudflare. | **Secret** |
-
-Never put the secret in chat, GitHub, browser configuration or a screenshot. `APP_ORIGIN` is already the staging origin and should remain `https://spinarium-staging.cipherlogsplus.workers.dev`.
-
-4. **Configure production email.** In Auth0's email-provider settings, configure your supported external SMTP/email provider and sender for verification and password reset. Auth0's [built-in sender supports testing, but not production](https://auth0.com/docs/customize/email/smtp-email-providers). Keep email verification enabled and configure provider password/abuse protections.
-
-When these settings are saved, the remaining work is to verify configuration, complete the private R2 binding, test real verified signup/login/reset with a test inbox, and grant administrator access only to the confirmed owner account. Production activation and DNS cutover follow hosted verification. Claims remain disabled.
-
-The [technical migration guide](SPINARIUM-CLOUDFLARE.md) contains the full deployment and verification procedure. No Auth0 tenant, application details or email sender have been supplied yet.
+Production was activated October 2, 2026 at 17:30:54 UTC. Hosted API and original-site checks passed; final production browser verification is in progress. See [VERIFICATION.md](../VERIFICATION.md) for the evidence and [deployment](SPINARIUM-CLOUDFLARE.md) for packaging/rollback.

@@ -6,7 +6,8 @@ import { createPreviewAccess } from "../spinarium/data/preview-service.js";
 import { spinariumConfig } from "../spinarium/config.js";
 
 // Isolated HTTP doubles: no Cloudflare account, provider, or hosted API is used.
-const config = { backend: "cloudflare", apiBase: "/api", signupEnabled: false };
+const config = { backend: "cloudflare", authProvider: "password", apiBase: "/api", signupEnabled: false };
+const account = { email: "collector@example.invalid", password: "test-only-password-12345", displayName: "Test collector" };
 const userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const otherId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const veilingId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -43,15 +44,17 @@ async function signedIn() {
   return auth;
 }
 
-await test("live config stays in empty preview; unsupported or cross-origin API settings fail closed", async () => {
-  assert.equal(spinariumConfig.previewEnabled, true);
+await test("public config explicitly selects Cloudflare; unsupported or cross-origin settings fail closed", async () => {
+  assert.equal(typeof spinariumConfig.previewEnabled, "boolean");
   assert.equal(spinariumConfig.backend, "cloudflare");
-  assert.equal(spinariumConfig.apiBase, "");
-  assert.equal(spinariumConfig.signupEnabled, false);
+  assert.equal(spinariumConfig.authProvider, "password");
+  assert.equal(spinariumConfig.apiBase, spinariumConfig.previewEnabled ? "" : "/api");
+  assert.equal(typeof spinariumConfig.signupEnabled, "boolean");
+  if (spinariumConfig.previewEnabled) assert.equal(spinariumConfig.signupEnabled, false);
   assert.equal(spinariumConfig.supabaseUrl, "");
   assert.equal(spinariumConfig.supabasePublishableKey, "");
   assert(Object.isFrozen(spinariumConfig));
-  for (const invalid of [spinariumConfig, { ...config, backend: "supabase" },
+  for (const invalid of [{ ...spinariumConfig, apiBase: "" }, { ...config, backend: "supabase" },
     { ...config, apiBase: "https://example.invalid/api" }, { ...config, apiBase: "//example.invalid/api" },
     { ...config, apiBase: "/api?secret=private-provider-detail" }, { ...config, apiBase: "/api/../admin" },
     { ...config, apiBase: "/api/" }, { ...config, apiBase: "" }]) {
@@ -68,20 +71,62 @@ await test("live config stays in empty preview; unsupported or cross-origin API 
   }
 });
 
-await test("signin/signup redirect only to Worker endpoints and never submit local credentials", async () => {
-  const paths = [];
-  let network = 0;
-  const auth = createAuthClient(config, { navigate: (path) => paths.push(path),
-    fetchImpl: async () => { network++; throw new Error("No credential fetch"); } });
-  await auth.signIn({ email: "ignored@example.invalid", password: "ignored-password" });
-  assert.deepEqual(paths, ["/api/auth/login"]);
+await test("signin/signup POST only allowed account fields to the same-origin Worker", async () => {
+  const calls = [];
+  const fetchImpl = async (path, options) => { calls.push({ path, options }); return json(sessionData()); };
+  const auth = createAuthClient(config, { fetchImpl });
+  await auth.signIn({ ...account, role: "admin", userId: otherId });
+  assert.equal(auth.getSession().flow, "password");
+  assert.equal(calls[0].path, "/api/auth/login");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { email: account.email, password: account.password });
   await rejectCode(auth.signUp(), "UNSUPPORTED");
-  const signup = createAuthClient({ ...config, signupEnabled: true }, { navigate: (path) => paths.push(path) });
-  await signup.signUp({ email: "ignored@example.invalid", password: "ignored-password" });
-  assert.deepEqual(paths, ["/api/auth/login", "/api/auth/signup"]);
+  const signup = createAuthClient({ ...config, signupEnabled: true }, { fetchImpl });
+  await signup.signUp({ ...account, email: "  COLLECTOR@example.invalid ", role: "admin", ownerships: [{ veilingId }] });
+  assert.equal(calls[1].path, "/api/auth/signup");
+  assert.deepEqual(JSON.parse(calls[1].options.body), account);
+  for (const { options } of calls) {
+    assert.equal(options.method, "POST");
+    assert.equal(options.credentials, "same-origin");
+    assert.equal(options.mode, "same-origin");
+    assert.equal(options.redirect, "error");
+    assert.equal(options.headers["Content-Type"], "application/json");
+    assert.equal(options.headers["x-csrf-token"], undefined);
+    assert.equal(options.headers.Authorization, undefined);
+  }
   await rejectCode(auth.requestPasswordReset(), "UNSUPPORTED");
   await rejectCode(auth.updatePassword(), "UNSUPPORTED");
-  assert.equal(network, 0);
+  auth.invalidateSession(); signup.invalidateSession();
+});
+
+await test("signup validates Unicode password/name bounds without sending invalid account details", async () => {
+  const calls = [];
+  const auth = createAuthClient({ ...config, signupEnabled: true }, { fetchImpl: async (path, options) => {
+    calls.push({ path, options });
+    return json({ ...sessionData(), user: { ...user, displayName: JSON.parse(options.body).displayName } });
+  } });
+  for (const password of ["1234", "a".repeat(129), "🔐".repeat(14), " ".repeat(15), "a".repeat(15) + "\ud800"])
+    await rejectCode(auth.signUp({ ...account, password }), "INVALID_PASSWORD");
+  await rejectCode(auth.signUp({ ...account, email: "bad-email" }), "INVALID_EMAIL");
+  await rejectCode(auth.signUp({ ...account, displayName: " " }), "INVALID_INPUT");
+  await rejectCode(auth.signUp({ ...account, displayName: "🔐".repeat(121) }), "INVALID_INPUT");
+  assert.equal(calls.length, 0);
+  const unicode = { ...account, password: "🔐".repeat(128), displayName: "🔐".repeat(120) };
+  const session = await auth.signUp(unicode);
+  assert.equal(session.user.displayName, unicode.displayName);
+  assert.equal(JSON.parse(calls[0].options.body).password, unicode.password);
+  auth.invalidateSession();
+});
+
+await test("wrong credentials and unavailable signup expose only safe errors and clear local identity", async () => {
+  const auth = createAuthClient(config, { fetchImpl: async (path) =>
+    path.endsWith("/session") ? json(sessionData()) : json({ code: "INVALID_CREDENTIALS", message: "private-provider-detail" }, 401) });
+  await auth.consumeAuthCallback();
+  await rejectCode(auth.signIn(account), "INVALID_CREDENTIALS");
+  assert.equal(auth.getSession(), null);
+  const signup = createAuthClient({ ...config, signupEnabled: true }, { fetchImpl: async () =>
+    json({ code: "ACCOUNT_UNAVAILABLE", message: "private-provider-detail" }, 400) });
+  await rejectCode(signup.signUp(account), "ACCOUNT_UNAVAILABLE");
+  assert.equal(signup.getSession(), null);
 });
 
 await test("session hydration strips privilege claims and tokens while using same-origin cookies", async () => {
@@ -92,7 +137,7 @@ await test("session hydration strips privilege claims and tokens while using sam
   const callback = await auth.consumeAuthCallback();
   assert.equal(callback.handled, true);
   const session = auth.getSession();
-  assert.equal(session.flow, "oidc");
+  assert.equal(session.flow, "password");
   assert.deepEqual(session.user, user);
   assert(Object.isFrozen(session));
   assert.equal(auth.getCsrfToken(), csrfToken);
@@ -123,15 +168,16 @@ await test("anonymous sessions remain signed out; disabled and malformed session
   }
 });
 
-await test("verification notices are scrubbed and cannot create identity or permission", async () => {
-  for (const [notice, code] of [["verify-email", "EMAIL_UNVERIFIED"], ["failed", "SIGN_IN_FAILED"]]) {
+await test("obsolete provider notices are scrubbed and cannot create identity or demand verification", async () => {
+  for (const notice of ["verify-email", "failed", "admin"]) {
     let calls = 0;
     const replaced = [];
-    const auth = createAuthClient(config, { fetchImpl: async () => { calls++; return json(sessionData()); } });
-    await rejectCode(auth.consumeAuthCallback({ url: `https://example.invalid/spinarium/?auth=${notice}#signin`,
-      replaceUrl: (url) => replaced.push(url) }), code);
+    const auth = createAuthClient(config, { fetchImpl: async () => { calls++; return json({ code: "AUTHENTICATION_REQUIRED" }, 401); } });
+    const result = await auth.consumeAuthCallback({ url: `https://example.invalid/spinarium/?auth=${notice}#signin`,
+      replaceUrl: (url) => replaced.push(url) });
+    assert.equal(result.session, null);
     assert.deepEqual(replaced, ["https://example.invalid/spinarium/#signin"]);
-    assert.equal(calls, 0);
+    assert.equal(calls, 1);
     assert.equal(auth.getSession(), null);
   }
   const replaced = [];

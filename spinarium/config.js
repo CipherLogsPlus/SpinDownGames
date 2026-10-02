@@ -7,7 +7,8 @@ export const spinariumConfig = Object.freeze({
   // Temporary UI preview. This is not authentication or access protection.
   previewEnabled: true,
   backend: "cloudflare",
-  // Enable only after Auth0 signup and verified-email sessions are hosted-tested.
+  authProvider: "password",
+  // Enable only after hosted signup, login and session checks pass.
   signupEnabled: false,
   // Set to "/api" only after hosted verification. Empty means fail closed.
   apiBase: "",

@@ -1,5 +1,36 @@
 # Website and Spinarium verification
 
+## Production activation — 2 October 2026, 17:30:54 UTC
+
+Worker `spinarium-production` and its 43 public assets are active on route `spindowngames.com/*` (route ID `0689578f458d4124809042de5d84fe40`), backed by D1 `spinarium-production` (`ce02e866-1b5b-4495-bf8b-38719a47b344`) with both migrations and the ledger applied. Generated production configuration disables preview and enables `/api` password signup; no administrator or ownership grant was created.
+
+All four apex A records are proxied while retaining their original GitHub Pages IP values. `www` stays a DNS-only CNAME, and Pages/CNAME remain for rollback. Always Use HTTPS is enabled; active Full SSL is unchanged. Initial stale-DNS requests reached Pages before propagation; fresh health returned HTTP 200 with accounts enabled and claims disabled.
+
+Completed actual hosted checks:
+
+- Production API checks passed 13 requests: signup/save/session/empty ownership; collector admin denial; wrong-origin logout denial; valid logout/revocation; normalized-email relogin returning the same account/profile; matching generic failures for wrong password and unknown account; Secure/HttpOnly/SameSite=Lax cookie and no-store responses.
+- The original-site hosted browser suite passed all 29 checks. Thirteen served assets, including the existing hero artwork, matched repository bytes. Apex HTTP, `www` HTTP and `www` HTTPS returned 301 redirects to the HTTPS apex, which returned 200. Private backend/Git paths returned 404.
+- Staging passed 14 actual account browser checks, including saved-account persistence, signup/login, mobile Menu and keyboard logout. Only the two specifically identified QA accounts were removed with identifier/email guards and no-admin/no-ownership checks; dependent credential/session rows cascaded. Staging users, credentials, sessions, ownership and administrators were verified empty afterward. The updated local Spinarium suite passed 57 checks; the direct Worker suite remains 40/40 and the adapter suite 18 checks.
+- The reproducible enabled production asset package and production dry run passed locally; the dry run made no remote changes.
+
+Final actual production account browser verification is still in progress. These API/original-site results do not assert that pending suite passed. Password reset is unavailable for all accounts; R2 artwork and claims remain disabled.
+
+## Direct password accounts — 2 October 2026
+
+The latest owner instruction superseded Auth0 setup and verified-email requirements. Direct Cloudflare signup/login now saves a normalized, unverified email-shaped identifier, profile and salted scrypt password hash in D1, while preserving Spinarium Home, Collection, Explore and the cinematic. R2 is not a signup/login prerequisite; password reset is unavailable for all accounts until email delivery and secure recovery are implemented.
+
+Completed checks for this new implementation:
+
+- The Worker suite passed 40/40 local tests: 11 direct-password tests, 18 retained legacy identity-provider tests, seven data/permission tests and four HTTP/router tests.
+- `scripts/verify-spinarium-cloudflare.mjs` passed 18 adapter checks; `scripts/verify-spinarium.cjs` passed 56 local browser checks. These are local tests rather than hosted browser evidence.
+- Staging is deployed with password provider, authentication and signup enabled. Migration `0002_password_accounts.sql` plus its index is applied. Generated static configuration enables `/api` signup and disables preview.
+- An actual hosted staging signup returned HTTP 201; saved-profile, session and empty-dashboard reads worked against D1. The real browser signup/login/reload round trip is still in progress in this record.
+- Production D1 `spinarium-production`, ID `ce02e866-1b5b-4495-bf8b-38719a47b344`, was created with foundation/password migrations and the migration ledger applied. It is empty. Production Worker/DNS activation is not yet verified in this record.
+
+The repository frontend intentionally retains development preview defaults. Enabled staging/production assets are generated separately. Production-ready privacy/terms now describe direct credential handling, unverified identifiers, Cloudflare hosting, eight-hour sessions and unavailable recovery; they are prepared for the upcoming production asset bundle.
+
+Prior foundation and staging results below preserve the earlier decisions and tests. Their Auth0 prerequisites and disabled deployment state are historical; they do not override the current direct-password implementation or establish production activation.
+
 ## Cloudflare migration foundation — 2 October 2026
 
 The session inspected GitHub main at `a7e1dad` before preparing the isolated Worker backend and dormant frontend Cloudflare adapters. GitHub Pages, `CNAME`, live DNS and current artwork were preserved. At the end of the local foundation milestone, no Cloudflare Spinarium resources, Auth0 application/connection, real accounts, administrator grants or ownership had been created or deployed. The subsequent hosted staging deployment is recorded separately below.

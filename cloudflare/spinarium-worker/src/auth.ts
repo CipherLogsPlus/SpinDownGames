@@ -1,22 +1,14 @@
 import * as oauth from 'oauth4webapi';
 import { HttpError, json } from './http';
 import type { Env } from './types';
+import { handlePasswordAuth } from './password-auth';
+import { applicationConfig, assertRequestOrigin, cookie, clearCookie, epoch, hashToken, readCookie, requireCsrf, requireSession, SESSION_COOKIE, SESSION_TTL, sessionProjection, token, TOKEN_PATTERN } from './session';
+export { hashToken, requireCsrf, requireSession } from './session';
+export type { AuthSession } from './session';
 
-const SESSION_COOKIE = '__Host-spinarium_session';
 const ATTEMPT_COOKIE = '__Host-spinarium_oidc';
-const SESSION_TTL = 8 * 60 * 60;
 const ATTEMPT_TTL = 10 * 60;
-const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const CALLBACK_PATH = '/api/auth/callback';
-
-export interface AuthSession {
-  userId: string;
-  displayName: string;
-  memberSince: string;
-  csrfToken: string;
-  sessionTokenHash: string;
-  expiresAt: number;
-}
 
 interface Attempt {
   nonce: string;
@@ -37,43 +29,10 @@ export interface AuthDependencies {
   fetch?: typeof fetch;
 }
 
-function epoch(): number {
-  return Math.floor(Date.now() / 1000);
-}
-
-function token(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-}
-
-export async function hashToken(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function readCookie(request: Request, name: string): string | null {
-  const header = request.headers.get('Cookie');
-  if (!header || header.length > 8192) return null;
-  const values = header.split(';').map((part) => part.trim()).filter((part) => part.startsWith(`${name}=`));
-  if (values.length !== 1) return null;
-  const value = values[0].slice(name.length + 1);
-  return TOKEN_PATTERN.test(value) ? value : null;
-}
-
-function cookie(name: string, value: string, maxAge: number): string {
-  return `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
-}
-
-function clearCookie(name: string): string {
-  return cookie(name, '', 0);
-}
-
 function authConfig(env: Env): AuthConfig {
-  if (env.AUTH_ENABLED !== 'true') {
-    throw new HttpError(503, 'authentication_unavailable', 'Account access is not enabled yet.');
-  }
+  const { origin: configuredOrigin } = applicationConfig(env);
   try {
-    const origin = new URL(env.APP_ORIGIN);
+    const origin = new URL(configuredOrigin);
     const issuer = new URL(env.OIDC_ISSUER);
     if (origin.protocol !== 'https:' || origin.origin !== env.APP_ORIGIN || origin.username || origin.password) throw new Error();
     if (issuer.protocol !== 'https:' || issuer.username || issuer.password || issuer.search || issuer.hash) throw new Error();
@@ -90,47 +49,6 @@ function authConfig(env: Env): AuthConfig {
   } catch {
     throw new HttpError(503, 'authentication_unavailable', 'Account access is not configured.');
   }
-}
-
-function assertRequestOrigin(request: Request, config: AuthConfig): void {
-  if (new URL(request.url).origin !== config.origin) throw new HttpError(403, 'origin_rejected', 'This request origin is not allowed.');
-}
-
-/** Mutations require the browser Origin and a CSRF token obtained from the session endpoint. */
-export function requireCsrf(request: Request, env: Env, session: AuthSession): void {
-  const config = authConfig(env);
-  assertRequestOrigin(request, config);
-  if (request.headers.get('Origin') !== config.origin) throw new HttpError(403, 'origin_rejected', 'This request origin is not allowed.');
-  const value = request.headers.get('X-CSRF-Token') ?? '';
-  const encoder = new TextEncoder();
-  if (!TOKEN_PATTERN.test(value) || !crypto.subtle.timingSafeEqual(encoder.encode(value), encoder.encode(session.csrfToken))) {
-    throw new HttpError(403, 'csrf_rejected', 'Reload your session before continuing.');
-  }
-}
-
-/** Never use replicated stale reads to decide whether a revoked account/session may proceed. */
-export async function requireSession(request: Request, env: Env): Promise<AuthSession> {
-  const config = authConfig(env);
-  assertRequestOrigin(request, config);
-  const rawToken = readCookie(request, SESSION_COOKIE);
-  if (!rawToken) throw new HttpError(401, 'authentication_required', 'Sign in to continue.');
-  const sessionTokenHash = await hashToken(rawToken);
-  const row = await env.DB.withSession('first-primary').prepare(`
-    SELECT s.user_id, s.csrf_token, s.expires_at, u.display_name, u.created_at
-    FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled = 0
-  `).bind(sessionTokenHash, epoch()).first<{
-    user_id: string; csrf_token: string; expires_at: number; display_name: string; created_at: number;
-  }>();
-  if (!row) throw new HttpError(401, 'authentication_required', 'Sign in to continue.');
-  return {
-    userId: row.user_id,
-    displayName: row.display_name,
-    memberSince: new Date(row.created_at * 1000).toISOString(),
-    csrfToken: row.csrf_token,
-    sessionTokenHash,
-    expiresAt: row.expires_at,
-  };
 }
 
 async function rateLimit(request: Request, env: Env): Promise<void> {
@@ -305,8 +223,10 @@ async function callback(request: Request, env: Env, config: AuthConfig, dependen
 export async function handleAuth(request: Request, env: Env, dependencies: AuthDependencies = {}): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   if (!['/api/auth/login', '/api/auth/signup', CALLBACK_PATH, '/api/auth/session', '/api/auth/logout'].includes(path)) return null;
+  const commonConfig = applicationConfig(env);
+  assertRequestOrigin(request, commonConfig);
+  if (env.AUTH_PROVIDER === 'password') return handlePasswordAuth(request, env);
   const config = authConfig(env);
-  assertRequestOrigin(request, config);
   if (request.url.length > 4096) throw new HttpError(400, 'invalid_request', 'Invalid request.');
   const method = path === '/api/auth/logout' ? 'POST' : 'GET';
   if (request.method !== method) throw new HttpError(405, 'method_not_allowed', 'This method is not supported.');
@@ -314,7 +234,7 @@ export async function handleAuth(request: Request, env: Env, dependencies: AuthD
   if (path === CALLBACK_PATH) return callback(request, env, config, dependencies);
   const session = await requireSession(request, env);
   if (path === '/api/auth/session') {
-    return json({ user: { id: session.userId, displayName: session.displayName, memberSince: session.memberSince }, csrfToken: session.csrfToken, expiresAt: new Date(session.expiresAt * 1000).toISOString() });
+    return json(sessionProjection(session));
   }
   requireCsrf(request, env, session);
   const db = env.DB.withSession('first-primary');

@@ -8,6 +8,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
+    "AUTH_PROVIDER": "password",
     "AUTH_ENABLED": "false",
     "SIGNUP_ENABLED": "false",
     "APP_ORIGIN": "",
@@ -15,7 +16,6 @@
     "OIDC_CLIENT_ID": "",
     "AUTH0_CONNECTION": ""
   },
-  "secrets": { "required": ["OIDC_CLIENT_SECRET"] },
   "d1_databases": [{
     "binding": "DB",
     "database_name": "spinarium-local",
