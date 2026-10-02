@@ -2,7 +2,7 @@
 
 The latest owner instruction selects direct email/password signup and login through Cloudflare Workers, with D1 saving account data. Unverified or non-deliverable email-shaped identifiers are allowed. They do not prove identity or grant permissions. The earlier Auth0 setup requirement is superseded; no Auth0 account, application or secret is needed for this flow.
 
-The current milestone is signup, saved account data and login directly through Spinarium, without owner setup in provider dashboards. Successful signup/login opens the existing Home, My Collection and Explore Veilings interface and preserves its cinematic. New accounts own zero Veilings. Production was activated October 2, 2026 at 17:30:54 UTC. Hosted API signup/login, saved-profile/session/empty-dashboard, cookie and denial checks passed. Staging passed 14 actual browser checks; final production browser verification is in progress; see [verification](../VERIFICATION.md).
+The current milestone is signup, saved account data and login directly through Spinarium, without owner setup in provider dashboards. Successful signup/login opens the existing Home, My Collection and Explore Veilings interface and preserves its cinematic. New accounts own zero Veilings. Production was activated October 2, 2026 at 17:30:54 UTC. Hosted API signup/login, saved-profile/session/empty-dashboard, cookie and denial checks passed. Production passed 12 actual account-browser checks; staging passed 14; see [verification](../VERIFICATION.md).
 
 ## Saved accounts and sessions
 
@@ -10,7 +10,7 @@ The current milestone is signup, saved account data and login directly through S
 
 The email-shaped login identifier is trimmed and lowercased, with no alias stripping. It is unique in `password_accounts.email_normalized`. Its address need not receive email, and it is never a verified identity, account-linking shortcut or administrator role. Password accounts use their own server-generated IDs; matching an old provider email does not link accounts.
 
-Passwords must contain 15–128 Unicode code points and at most 512 UTF-8 bytes. The Worker stores a versioned scrypt hash with a fresh 16-byte random salt and 32-byte output (`N=32768`, `r=8`, `p=3`) rather than plaintext. Native Worker hashing supported hosted staging and production signup/login. Final production browser verification is still in progress. Passwords, cookies and credential request bodies must not enter ordinary logs.
+Passwords must contain 15–128 Unicode code points and at most 512 UTF-8 bytes. The Worker stores a versioned scrypt hash with a fresh 16-byte random salt and 32-byte output (`N=32768`, `r=8`, `p=3`) rather than plaintext. Native Worker hashing supported hosted staging and production signup/login. Production signup/login and saved-account persistence also passed 12 actual browser checks. Passwords, cookies and credential request bodies must not enter ordinary logs.
 
 The browser receives an opaque Secure, HttpOnly, SameSite session cookie with an eight-hour lifetime. D1 stores the session-token digest and server expiry. `GET /api/auth/session` verifies the current active account/session. `POST /api/auth/logout` revokes it with same-origin and CSRF checks. Browser flags, submitted user IDs and email text cannot establish identity. Account data survives reload/sign-out; access requires a valid server session or the password.
 

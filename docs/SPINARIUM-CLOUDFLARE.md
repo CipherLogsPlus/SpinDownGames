@@ -2,7 +2,7 @@
 
 Cloudflare Workers enforce backend authentication and permissions; D1 stores authoritative application data, and private R2 is reserved for artwork. The latest owner instruction selects direct email/password accounts, including unverified or non-deliverable email-shaped identifiers. Signup, saved data and login must work without owner setup in provider dashboards. The existing Spinarium dashboard, navigation and cinematic stay in place. Earlier Auth0 setup requirements are superseded. No external identity-provider setup is required for the current account milestone.
 
-Production Worker `spinarium-production` serves <https://spindowngames.com/> and its account API, activated October 2, 2026 at 17:30:54 UTC. Hosted API and original-site checks passed; final production browser verification is in progress. Preserve `CNAME`, the Pages fallback and original DNS values for rollback. The isolated backend lives in `cloudflare/spinarium-worker/`; InvoHub stays separate.
+Production Worker `spinarium-production` serves <https://spindowngames.com/> and its account API, activated October 2, 2026 at 17:30:54 UTC. Hosted production API, account-browser and original-site checks passed. Preserve `CNAME`, the Pages fallback and original DNS values for rollback. The isolated backend lives in `cloudflare/spinarium-worker/`; InvoHub stays separate.
 
 ## Verified account access and prior staging
 
@@ -20,7 +20,7 @@ R2 still returns `10042`; no bucket exists. Email-service access returned `2036 
 
 Migration `0002_password_accounts.sql` adds `password_accounts`, referencing the server-generated user ID. It stores a unique normalized email-shaped identifier and versioned salted scrypt hash. Email normalization trims and lowercases without stripping aliases. Email is unverified and never supplies administrator authority or links to a legacy provider account.
 
-The server accepts passwords of 15–128 Unicode code points and at most 512 UTF-8 bytes. Scrypt uses a random 16-byte salt, 32-byte output and `N=32768`, `r=8`, `p=3`. Native hosted hashing supported the successful staged signup; final production browser checks are in progress. Plaintext passwords are neither stored nor logged.
+The server accepts passwords of 15–128 Unicode code points and at most 512 UTF-8 bytes. Scrypt uses a random 16-byte salt, 32-byte output and `N=32768`, `r=8`, `p=3`. Native hosted hashing supported the successful staged signup; production signup/login and saved-account persistence passed 12 actual browser checks. Plaintext passwords are neither stored nor logged.
 
 Sessions use an opaque Secure, HttpOnly cookie, a D1 token digest, eight-hour expiry, same-origin checks and CSRF protection. The Worker validates the current account/session on private requests. The browser cannot choose its owner, role, awards or catalog permissions. Introduction completion remains browser-local.
 
@@ -50,6 +50,8 @@ The frontend lets the user register and sign in through Spinarium, then opens th
 
 See [accounts](SPINARIUM-ACCOUNTS.md), [activation](SPINARIUM-ACTIVATION.md), [administration](SPINARIUM-ADMIN.md) and [verification](../VERIFICATION.md).
 
+Production account verification passed 13 API requests and 12 actual browser checks; the original-site hosted suite passed 29 checks. Saved QA profiles/password hashes survived logout and relogin. Only the exact guarded test accounts were removed afterward, with credential/session cascade and empty account/admin/ownership counts verified; no real user data or blanket session collection was deleted. Temporary credential/cookie/request files were removed.
+
 ## Reproduce the active production package
 
 From the repository root:
@@ -74,8 +76,6 @@ Keep D1 databases, password/profile rows, ownership records, audit history, migr
 For a code problem, restore a known compatible Worker version and matching generated assets while retaining the same D1 binding. To pause registrations, disable server `SIGNUP_ENABLED` and the generated signup UI while retaining authenticated login for existing accounts. Disable `AUTH_ENABLED` only when all account access must be paused; preserve its records.
 
 For a full return to Pages hosting, detach the production apex Worker route and restore the four apex A records to DNS-only using their retained GitHub IP values. Keep `www` CNAME, `CNAME`, Pages domain/HTTPS setup, Full SSL and Always Use HTTPS. Verify apex/`www`, HTTP redirects and the restored site. Account endpoints are unavailable while Worker routing is removed, but saved accounts remain in D1 for restoration. Do not delete D1 data or blanket-clear sessions as part of hosting rollback.
-
-<a id="auth0-emailpassword-setup"></a>
 
 ## Scope and earlier decisions
 

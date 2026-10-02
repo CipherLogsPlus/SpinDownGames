@@ -6,4 +6,4 @@ Use a display name, an email-shaped login identifier and a password of at least 
 
 Password reset is unavailable for every account until email delivery and secure recovery are implemented. R2 is reserved for private artwork and does not block signup/login. Claims remain disabled.
 
-Production was activated October 2, 2026 at 17:30:54 UTC. Hosted API and original-site checks passed; final production browser verification is in progress. See [VERIFICATION.md](../VERIFICATION.md) for the evidence and [deployment](SPINARIUM-CLOUDFLARE.md) for packaging/rollback.
+Production was activated October 2, 2026 at 17:30:54 UTC. Hosted production API, account-browser and original-site checks passed. See [VERIFICATION.md](../VERIFICATION.md) for the evidence and [deployment](SPINARIUM-CLOUDFLARE.md) for packaging/rollback.

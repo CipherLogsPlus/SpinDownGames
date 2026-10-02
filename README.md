@@ -30,7 +30,7 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 - `assets/fonts/`: Anton and DM Sans, distributed with their SIL Open Font Licenses.
 - `scripts/verify.cjs`: browser checks for interactions, responsive layout, accessibility, and fallbacks.
 - `spinarium/`: separate cinematic collection area at `/spinarium/`, with reusable native modules, an explicit empty development preview (`admin` / `1234`) in repository configuration, plain black slots, and disabled physical-card registration. Preview access is not real authentication or administrator authority. The homepage's **View Spinarium** button is its entry point.
-- `cloudflare/spinarium-worker/`: isolated Worker backend foundation with D1-native migrations, direct email/password authentication and server sessions, protected collector/admin APIs, and private R2 artwork. The production Worker/static site and dedicated D1 database are active. Direct signup/login and saved-data APIs passed hosted checks; final production browser verification is in progress. Private R2 artwork remains unconfigured; GitHub Pages and original DNS values remain available for rollback.
+- `cloudflare/spinarium-worker/`: isolated Worker backend foundation with D1-native migrations, direct email/password authentication and server sessions, protected collector/admin APIs, and private R2 artwork. The production Worker/static site and dedicated D1 database are active. Direct signup/login, saved-data APIs and actual account-browser checks passed; original-site checks also passed. Private R2 artwork remains unconfigured; GitHub Pages and original DNS values remain available for rollback.
 - `docs/SPINARIUM-ACTIVATION.md`: current account activation status: direct Cloudflare signup/login, unverified identifiers, saved D1 records, no provider dashboard setup, and unavailable password recovery.
 - `docs/SPINARIUM-CLOUDFLARE.md`: the selected Cloudflare platform, actually verified connector/CLI access, and incremental staging/hosting migration gates. Retained Supabase adapters/schema and historical setup documents are superseded unused groundwork.
 - `docs/SPINARIUM-ARCHITECTURE.md`: Spinarium service boundary, domain relationships, and requirements for future authenticated ownership and secure claiming.
@@ -59,7 +59,7 @@ The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past eve
 
 Cloudflare Worker `spinarium-production` serves the apex website and `/api/` accounts. GitHub Pages still publishes `main` from the repository root as fallback; pushing there does not deploy the production Worker. Use the separately generated production assets/configuration and verify the actual Worker revision after deployment. This repository is separate from InvoHub and has no connection to private inventory or authentication.
 
-Cloudflare Workers, D1 and R2 are the selected replacement infrastructure. Keep the existing Pages configuration, `CNAME` and original DNS values for rollback until the complete replacement site and backend have passed hosted checks. The isolated backend package does not deploy through a Pages push. Direct password accounts were activated on October 2, 2026 at 17:30:54 UTC. Hosted API and original-site checks passed; final production browser checks are in progress. Claims and administrator grants remain inactive; repository preview access creates no ownership.
+Cloudflare Workers, D1 and R2 are the selected replacement infrastructure. Keep the existing Pages configuration, `CNAME` and original DNS values for rollback until the complete replacement site and backend have passed hosted checks. The isolated backend package does not deploy through a Pages push. Direct password accounts were activated on October 2, 2026 at 17:30:54 UTC. Hosted production API, account-browser and original-site checks passed. Claims and administrator grants remain inactive; repository preview access creates no ownership.
 
 ### Custom domain
 
@@ -81,7 +81,7 @@ Do not turn the live apex records gray as part of routine edits. For a deliberat
 
 The policies describe the informational site, hosting, browser-only dice history, links to external platforms and the active direct credential service, including saved email-shaped identifiers/password hashes and unavailable recovery. Contact uses the existing Instagram and Discord channels because no business email has been supplied. No registered entity name, postal address, retention deadline, governing jurisdiction, arbitration clause, or checkout/refund policy has been invented.
 
-Keep these pages aligned with actual practices. Revisit them before adding accounts, analytics, contact forms, newsletters, a shop, different hosting, or new data-sharing practices. Business-wide privacy duties and any future sales terms need a separate review of the relevant business details; publishing these pages is not a legal-compliance certification.
+Keep these pages aligned with actual practices. Revisit them before changing account features or adding analytics, contact forms, newsletters, a shop, different hosting, or new data-sharing practices. Business-wide privacy duties and any future sales terms need a separate review of the relevant business details; publishing these pages is not a legal-compliance certification.
 
 ## Coin interaction
 

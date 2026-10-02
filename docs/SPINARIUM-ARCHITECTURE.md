@@ -1,6 +1,6 @@
 # Spinarium architecture
 
-Cloudflare Workers serve the static website, authenticate accounts and enforce server-side permissions; D1 stores authoritative application records, and private R2 is reserved for artwork. Production Worker `spinarium-production` and its D1 database were activated October 2, 2026 at 17:30:54 UTC. Hosted API and original-site checks passed; final production browser verification is in progress. GitHub Pages, `CNAME` and original DNS origin values remain for rollback. R2 is unconfigured and does not block accounts. See [activation](SPINARIUM-ACTIVATION.md).
+Cloudflare Workers serve the static website, authenticate accounts and enforce server-side permissions; D1 stores authoritative application records, and private R2 is reserved for artwork. Production Worker `spinarium-production` and its D1 database were activated October 2, 2026 at 17:30:54 UTC. Hosted production API, account-browser and original-site checks passed. GitHub Pages, `CNAME` and original DNS origin values remain for rollback. R2 is unconfigured and does not block accounts. See [activation](SPINARIUM-ACTIVATION.md).
 
 The former Supabase architecture is preserved in [the historical document](history/SPINARIUM-ARCHITECTURE-SUPABASE-2026-10-01.md). Its provisioning and activation instructions are superseded; retained Supabase adapters and SQL are unused groundwork.
 
@@ -8,7 +8,7 @@ The former Supabase architecture is preserved in [the historical document](histo
 
 Production `/spinarium/` opens actual email/password login/signup. The repository development config retains the explicit `admin` / `1234` preview; it supplies no production identity or administrator authority. The dashboard contains My Collection and Explore Veilings; other sections sit behind Menu. Collections start empty, decorative slots are black, and details open only after a card selection. Registration remains disabled. Catalog creation must never create ownership.
 
-The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Real account onboarding state is not implemented. Generated staging and production configs disable preview and enable real `/api` password signup; the repository config retains the explicit development preview. Keep current artwork until the owner supplies a replacement draft. The planned space scene with a large purple Veil and no cube does not authorize an artwork change now.
+The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Per-account server onboarding state is not implemented; introduction completion remains browser-local. Generated staging and production configs disable preview and enable real `/api` password signup; the repository config retains the explicit development preview. Keep current artwork until the owner supplies a replacement draft. The planned space scene with a large purple Veil and no cube does not authorize an artwork change now.
 
 ## Code and service boundaries
 

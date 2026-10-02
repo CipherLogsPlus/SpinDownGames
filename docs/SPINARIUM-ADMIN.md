@@ -1,6 +1,6 @@
 # Spinarium protected administration
 
-Workers enforce Spinarium administrator authority. D1 stores the private allowlist and catalog audit; R2 holds protected artwork. Catalog creation and editing never grant collector ownership. The staging Worker and D1 database are deployed, with remote schema/audit verification. R2 remains unconfigured, and no verified owner account, administrator grant or ownership exists. Production accounts are active through the Cloudflare Worker; hosted API and original-site checks passed, and final browser verification is in progress. GitHub Pages remains fallback. No administrator grant exists. See [activation](SPINARIUM-ACTIVATION.md).
+Workers enforce Spinarium administrator authority. D1 stores the private allowlist and catalog audit; R2 holds protected artwork. Catalog creation and editing never grant collector ownership. The staging Worker and D1 database are deployed, with remote schema/audit verification. R2 remains unconfigured, and no verified owner account, administrator grant or ownership exists. Production accounts are active through the Cloudflare Worker; hosted API, 12 actual account-browser and original-site checks passed. GitHub Pages remains fallback. No administrator grant exists. See [activation](SPINARIUM-ACTIVATION.md).
 
 The former PostgreSQL/Supabase instructions are preserved [as superseded history](history/SPINARIUM-ADMIN-SUPABASE-2026-10-01.md). D1 needs its own migration and Worker authorization; do not install the PostgreSQL schema or assume RLS exists in D1.
 

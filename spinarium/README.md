@@ -1,6 +1,6 @@
 # Spinarium
 
-Spinarium is live at <https://spindowngames.com/spinarium/> through Cloudflare Worker `spinarium-production`, with direct email/password signup/login and saved D1 accounts. The homepage's **View Spinarium** button opens it. Hosted production API and original-site checks passed; final production browser verification is in progress. GitHub Pages and the original DNS origin values remain for rollback.
+Spinarium is live at <https://spindowngames.com/spinarium/> through Cloudflare Worker `spinarium-production`, with direct email/password signup/login and saved D1 accounts. The homepage's **View Spinarium** button opens it. Hosted production API, account-browser and original-site checks passed. GitHub Pages and the original DNS origin values remain for rollback.
 
 ## Repository development preview
 

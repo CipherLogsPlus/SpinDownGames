@@ -13,9 +13,11 @@ Completed actual hosted checks:
 - Staging passed 14 actual account browser checks, including saved-account persistence, signup/login, mobile Menu and keyboard logout. Only the two specifically identified QA accounts were removed with identifier/email guards and no-admin/no-ownership checks; dependent credential/session rows cascaded. Staging users, credentials, sessions, ownership and administrators were verified empty afterward. The updated local Spinarium suite passed 57 checks; the direct Worker suite remains 40/40 and the adapter suite 18 checks.
 - The reproducible enabled production asset package and production dry run passed locally; the dry run made no remote changes.
 
-Final actual production account browser verification is still in progress. These API/original-site results do not assert that pending suite passed. Password reset is unavailable for all accounts; R2 artwork and claims remain disabled.
+The final actual production account-browser suite passed all 12 checks without API fixtures: real UI signup with an unverified/non-deliverable identifier and HTTP 201; owned-profile/empty collection and welcome introduction; secure cookie flags; same-account reload and login from a fresh browser; mobile Menu with keyboard logout and a 48-pixel target; logout HTTP 200 and old-cookie replay HTTP 401; incorrect-password HTTP 401 with cleared UI/session; server admin/catalog denial; disabled claims; and no page errors, failed assets or persisted browser credentials. The earlier 405 came from stale Pages DNS and resolved without changing the application API URL. D1 inspection confirmed both QA profiles retained their server account IDs/display names and 94-character versioned password hashes after relogin, with zero administrator, ownership or catalog grants. Cleanup removed only the two specifically identified QA accounts using exact ID/email guards and no-admin/no-ownership checks; credential/session rows cascaded. Production users, credentials, sessions, administrators and ownership were verified empty afterward. Staging had the same guarded cleanup. Temporary credential/cookie/request files were deleted; only non-secret test results remain. Password reset is unavailable for all accounts; R2 artwork and claims remain disabled.
 
-## Direct password accounts — 2 October 2026
+## Direct password preparation — earlier checkpoint, 2 October 2026
+
+This checkpoint records the state before the production activation above. Its pending browser/production/bundle statements are superseded by the completed activation and verification recorded above.
 
 The latest owner instruction superseded Auth0 setup and verified-email requirements. Direct Cloudflare signup/login now saves a normalized, unverified email-shaped identifier, profile and salted scrypt password hash in D1, while preserving Spinarium Home, Collection, Explore and the cinematic. R2 is not a signup/login prerequisite; password reset is unavailable for all accounts until email delivery and secure recovery are implemented.
 
@@ -28,6 +30,8 @@ Completed checks for this new implementation:
 - Production D1 `spinarium-production`, ID `ce02e866-1b5b-4495-bf8b-38719a47b344`, was created with foundation/password migrations and the migration ledger applied. It is empty. Production Worker/DNS activation is not yet verified in this record.
 
 The repository frontend intentionally retains development preview defaults. Enabled staging/production assets are generated separately. Production-ready privacy/terms now describe direct credential handling, unverified identifiers, Cloudflare hosting, eight-hour sessions and unavailable recovery; they are prepared for the upcoming production asset bundle.
+
+The code CI run [37041996154](https://github.com/CipherLogsPlus/SpinDownGames/actions/runs/37041996154) passed at `82db232`, including 40 Worker tests, types/check, all three local/staging/production dry runs and adapter/domain/intro checks. Documentation updates are tracked in PR #3 with required checks.
 
 Prior foundation and staging results below preserve the earlier decisions and tests. Their Auth0 prerequisites and disabled deployment state are historical; they do not override the current direct-password implementation or establish production activation.
 
@@ -61,7 +65,7 @@ After the owner explicitly requested making Spinarium live, authenticated Cloudf
 - Follow-up local verification passed all 49 Spinarium browser checks, including real-mode first-entry/reentry/reduced-motion cinematic behavior with test-only account fixtures, and all 16 adapter contracts after correcting duplicate-number error parsing. Staging packaging and its deployment dry run passed. Privacy/terms updates passed local accessibility and mobile checks and were uploaded to staging.
 - R2 still returns error `10042`; no artwork bucket exists. Auth0 application/connection/secret remain unconfigured, and no real accounts or owner allowlist membership exist. Authentication/signup/claims remain disabled. Auth0 also requires a supported external production email sender before public verification/reset activation.
 
-These are actual remote D1, static-hosting and disabled-Worker checks, distinct from the local test results above. They do not verify hosted OIDC signup/login/verification/reset, authenticated sessions/CSRF, administrator/collector isolation, private R2 artwork or production cutover. The [activation handoff](docs/SPINARIUM-ACTIVATION.md) and [migration guide](docs/SPINARIUM-CLOUDFLARE.md#auth0-emailpassword-setup) provide the exact staging URLs and direct dashboard secret setup; secrets must never enter chat.
+These are actual remote D1, static-hosting and disabled-Worker checks, distinct from the local test results above. They do not verify hosted OIDC signup/login/verification/reset, authenticated sessions/CSRF, administrator/collector isolation, private R2 artwork or production cutover. The [activation handoff](docs/SPINARIUM-ACTIVATION.md) and [migration guide](docs/SPINARIUM-CLOUDFLARE.md) provide the exact staging URLs and direct dashboard secret setup; secrets must never enter chat.
 
 Earlier results below record previous website releases. They do not establish verification of the new Cloudflare backend or account activation.
 
