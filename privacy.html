@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="How the SpinDownGames™ website handles information, hosting logs, and links to community platforms."
+      content="How SpinDownGames™ handles website information, Spinarium accounts, password security, and connected services."
     />
     <meta name="theme-color" content="#0a0c10" />
     <link rel="canonical" href="https://spindowngames.com/privacy.html" />
@@ -29,20 +29,21 @@
       <h1>Privacy Policy</h1>
       <p class="legal-date">
         Effective and last updated:
-        <time datetime="2026-09-26">September 26, 2026</time>
+        <time datetime="2026-10-02">October 2, 2026</time>
       </p>
       <p class="legal-intro">
         This policy explains information handling for the public SpinDownGames™
-        website and the contact links it provides.
+        website, Spinarium accounts, and the contact links it provides.
       </p>
 
       <section aria-labelledby="site-information">
         <h2 id="site-information">What the website collects</h2>
         <p>
           The website provides card, community, and event information. It
-          currently has no customer accounts, checkout, contact forms, or
-          mailing-list signup. There is no visitor account database maintained
-          by this website.
+          currently has no checkout, contact forms, or mailing-list signup.
+          Spinarium saves account information when you sign up. Creating an
+          account does not establish administrator access or grant collectible
+          ownership.
         </p>
         <p>
           The dice roller keeps its recent rolls in the open page’s memory. That
@@ -52,13 +53,54 @@
         </p>
       </section>
 
+      <section aria-labelledby="spinarium-accounts">
+        <h2 id="spinarium-accounts">Spinarium accounts</h2>
+        <p>
+          The account service receives your email-shaped login
+          identifier, display name, and password over HTTPS through Cloudflare
+          Workers. The login identifier is trimmed and lowercased, stored in
+          Cloudflare D1, and is not verified as an email address you control.
+          An unverified or non-deliverable address may be used to sign up; it
+          does not establish your identity or grant administrator authority.
+        </p>
+        <p>
+          The service processes your password to create or check a salted,
+          slow password hash. It stores the hash rather than your plaintext
+          password. D1 also stores an application account ID, display name,
+          account dates and status, server session records, and security records
+          used to limit repeated requests. Collection records link to the
+          application account; trusted administrators’ catalog changes are
+          recorded for accountability. New accounts start with no owned Veilings.
+        </p>
+        <p>
+          Email sending and password reset are not configured, so password
+          recovery is unavailable for every account, including accounts using
+          a real email address. Account access depends on your password and
+          current server session. Session expiry limits access; it does not
+          promise immediate deletion of stored records. To ask about account
+          information or request its correction or deletion, use the private
+          contact options below.
+        </p>
+      </section>
+
       <section aria-labelledby="hosting">
         <h2 id="hosting">Hosting and technical information</h2>
         <p>
-          GitHub Pages hosts this website. GitHub states that it records
-          visitors’ IP addresses for security, including visits made without a
-          GitHub account. GitHub controls its hosting logs and their retention;
-          this website does not provide us with those logs.
+          Cloudflare manages the domain’s DNS and hosts the website and account
+          endpoints through Workers. Cloudflare D1 stores Spinarium account,
+          session, collection, and security records. Cloudflare processes
+          requests to deliver the site and its services. Current public artwork
+          is served with the website; private R2 artwork storage is not enabled.
+          See
+          <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare’s Privacy Policy</a>
+          for its own information practices.
+        </p>
+        <p>
+          A GitHub Pages copy is retained as fallback hosting. If you visit a
+          version served by GitHub Pages, GitHub states that it records visitors’
+          IP addresses for security, including visits made without a GitHub
+          account. GitHub controls its hosting logs and their retention; this
+          website does not provide us with those logs.
         </p>
         <p>
           Read
@@ -76,12 +118,25 @@
       </section>
 
       <section aria-labelledby="tracking">
-        <h2 id="tracking">Cookies and tracking</h2>
+        <h2 id="tracking">Cookies, browser storage, and tracking</h2>
         <p>
-          We have not added analytics, advertising pixels, tracking cookies, or
-          persistent browser storage to this website. Its code does not track
-          you across other websites or change its behavior in response to a
-          browser’s Do Not Track signal.
+          We have not added analytics, advertising pixels, or advertising
+          tracking cookies. Spinarium saves whether its welcome
+          introduction has finished in this browser’s local storage, so later
+          visits can bypass it. Clearing that site storage resets the
+          introduction. This preference is local to the browser and is separate
+          from your server account records.
+        </p>
+        <p>
+          Spinarium uses an essential session cookie that expires after eight hours. This cookie
+          is sent over HTTPS and cannot be read by page scripts. Signing out
+          revokes the Spinarium session. Introduction completion remains
+          browser-local; it is not stored as a per-account D1 preference. Browser
+          cookie controls can prevent secure sign-in from working.
+        </p>
+        <p>
+          The website’s code does not track you across other websites or change
+          its behavior in response to a browser’s Do Not Track signal.
         </p>
         <p>
           This describes the website’s own features. Hosting and the external
@@ -124,13 +179,16 @@
       <section aria-labelledby="choices">
         <h2 id="choices">Your choices and privacy requests</h2>
         <p>
-          You can browse the website without creating an account or joining a
-          community. Use the relevant platform’s controls to manage information
-          you share there. GitHub, Discord, and Instagram control their own
-          systems and retention settings.
+          You can browse the public website without creating an account or
+          joining a community. Personal Spinarium collection
+          access requires secure sign-in. Use your browser’s controls to clear
+          local site storage, and the relevant provider’s controls to manage
+          information you share there. GitHub, Cloudflare, Discord, and
+          Instagram operate their own systems and information practices.
         </p>
         <p>
-          To ask about information you have sent to the SpinDownGames™ team, or
+          To ask about Spinarium account information or information you have
+          sent to the SpinDownGames™ team, or
           to request access, correction, or deletion, contact us through the
           links below. We may need to verify that a request relates to you. The
           rights and exceptions that apply depend on applicable law; requests
@@ -142,10 +200,10 @@
       <section aria-labelledby="children">
         <h2 id="children">Children’s information</h2>
         <p>
-          The website does not offer forms or accounts to collect children’s
-          personal information. If a parent or guardian believes a child has
-          shared personal information with our team, please contact us. Separate
-          platforms have their own age requirements and privacy rules.
+          If a parent or guardian believes a child has shared personal
+          information with our team or used an enabled account service, please
+          contact us through the private options below. Separate platforms have
+          their own age requirements and privacy rules.
         </p>
       </section>
 

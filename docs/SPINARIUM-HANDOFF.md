@@ -1,67 +1,33 @@
-# Spinarium handoff — 1 October 2026
+# Spinarium handoff — 2 October 2026
 
-This file preserves the project context for a new Codex chat. It is repository documentation, not a promise that a new chat has conversation memory or Supabase access. Inspect the latest GitHub `main`, deployment status and working tree before continuing; preserve any uncommitted work.
+Repository: `CipherLogsPlus/SpinDownGames`. Website: <https://spindowngames.com/>. Spinarium: <https://spindowngames.com/spinarium/>. Inspect current GitHub `main`, deployments and uncommitted work before continuing. Preserve working pages, DNS, artwork and the GitHub Pages rollback path.
 
-## Project and owner instructions
+The latest owner instruction prioritizes actual signup, saved user data and login without owner setup in provider dashboards. Preserve the Spinarium Home, My Collection, Explore Veilings, Menu and cinematic; successful signup/login opens that interface. Direct Cloudflare email/password accounts replace the earlier Auth0 choice. Unverified or non-deliverable email-shaped identifiers are allowed and have no permission authority. No Auth0 application/client secret or email sender is required to deliver this account milestone.
 
-- Repository: `CipherLogsPlus/SpinDownGames`; live website: <https://spindowngames.com/>; Spinarium: <https://spindowngames.com/spinarium/>.
-- The existing site is static HTML/CSS/browser JavaScript on GitHub Pages, publishing the repository root from `main`. Keep that infrastructure. Preserve all original pages, products, content, branding, assets and policies. The existing homepage has an additive **View Spinarium** entry button.
-- Spinarium is the companion to premium engraved metal cards called **Veilings**, with digital artwork, lore, ownership, discovery and achievements. A future game is optional and must not be required for collecting to work.
-- The supplied visual reference is a dark cinematic fantasy dashboard: top navigation, left sidebar, castle/mountain hero, elegant serif title/names, muted cyan/silver borders, five-column desktop collection, selected-detail panel, responsive mobile layout. Use actual components, not a screenshot background.
-- The owner corrected the first preview: **no demo characters on the live page**. Every new collector starts with zero ownership. Undiscovered/empty cards must be **fully black**, without silhouettes, names, numbers or fake artwork. Do not grant sample cards.
-- Clicking View Spinarium must enter **login/sign-up first**. These must use actual provider authentication, never browser flags or fake successful account creation.
-- The owner needs a protected administrator account to create/edit Veiling artwork and descriptions. Creating a catalog character makes it available to the system; it does not give it to every collector. Administrator rights must be granted through a trusted backend, never signup metadata or a first-user shortcut.
-- The owner authorized publishing Spinarium and its requested corrections. Preserve the original website and verify changes before deployment. Do not invent a working backend because the interface looks complete.
+## Existing deployment and next verification
 
-## Code and completed foundation
+The Cloudflare connector authenticated successfully and performed actual staging writes, independently of the unauthenticated Wrangler CLI. D1 `spinarium-staging` (`1cfc3d12-1047-4cb7-8448-a30aff02d3d0`) received `0001_foundation.sql` with 10 application tables, two immutable-audit triggers and a Wrangler ledger. Worker/static staging with 43 public assets and `_headers` metadata was deployed at <https://spinarium-staging.cipherlogsplus.workers.dev/>. Earlier health/denial checks verified an intentionally disabled account deployment.
 
-The first dashboard milestone was merged in [PR #1](https://github.com/CipherLogsPlus/SpinDownGames/pull/1). This handoff accompanies its account/empty-collection correction.
+The direct-password backend is now deployed on staging with provider/auth/signup flags enabled, `0002_password_accounts.sql` plus index applied, and generated signup `/api` frontend assets without preview. Actual signup returned HTTP 201; saved profile, session and empty-dashboard reads worked. Staging passed 14 actual browser checks including mobile Menu, keyboard logout and account persistence. Production Worker `spinarium-production` and D1 `spinarium-production` (`ce02e866-1b5b-4495-bf8b-38719a47b344`) were activated October 2, 2026 at 17:30:54 UTC, with both migrations/ledger and the same 43 public assets. Route `spindowngames.com/*` is active. The four apex A records are proxied with their original GitHub IP values preserved; `www` CNAME stays DNS-only. Always Use HTTPS is enabled; Full SSL and Pages/CNAME are retained. Production API checks passed 13 requests, the actual account-browser suite passed 12 checks, and the original-site hosted suite passed 29 checks. No administrator or ownership grant exists. Both real QA profiles and salted password hashes persisted through relogin, then only the exact guarded QA accounts were removed; dependent credentials/sessions cascaded. Staging and production account/security counts were verified empty after cleanup. Temporary credential/cookie/request files were deleted. Refer to [VERIFICATION.md](../VERIFICATION.md) for actual local and hosted results; earlier OIDC tests do not prove the new account flow.
 
-- `spinarium/index.html`, `styles.css`, `app.js`: account-gated page, login/signup/reset UI, responsive dashboard, plain black empty slots, protected catalog editor and honest disabled physical registration.
-- `spinarium/auth/supabase-auth.js`: real Supabase REST authentication, provider-verified confirmed identities, email confirmation/recovery, sanitized errors, expiry and logout. Tokens stay only in memory; reload requires signing in again. Callback secrets are removed from the URL before requests.
-- `spinarium/data/supabase-service.js`: authenticated versioned collection RPC, backend administrator check, protected catalog writes and private artwork uploads/signing. No claim, delete or ownership-grant method.
-- `spinarium/domain/` and `components/`: separate domain queries/API types and safe text-node rendering. Counts derive from ownership, not black decorative slots.
-- `spinarium/data/demo-service.js` and old concept assets are historical fixtures only. The public application never imports the demonstration service or requests character/silhouette concept assets.
-- `supabase/spinarium-schema.sql`: **not yet applied to a hosted project**. Dedicated-project profile/catalog/ownership-read/discovery foundation, private artwork, explicit administrator allowlist, RLS and immutable catalog audit. No client can grant ownership, including the catalog administrator. Manual role grants and future ownership issuance need a separate immutable audit/provenance extension. `draft` is descriptive for an already-owned definition; a later workflow needs versioned approved content and unpublished revisions.
-- `spinarium/config.js`: **both public configuration values are empty**. Forms deliberately stay unavailable; no real account can be created through the live page until activation.
-- Current account-entry review images: `docs/screenshots/spinarium-signin-desktop.png` and `spinarium-signin-mobile.png`. Older dashboard images document the historical sample preview, not live user ownership.
+R2 returns `10042`, with no artwork bucket. Email-service access returned `2036 Unauthorized`. R2 does not block signup/login; password reset is unavailable for all accounts until email delivery and secure recovery exist. Do not require the owner to configure Auth0 or an email sender before implementing accounts.
 
-## Supabase access blocker
+## Account and permission contract
 
-The owner installed/connected the **Supabase plugin**. Plugin search confirmed it was installed, but this chat had **no callable Supabase project tools**. A normal CLI project-list check also reported no access token. Installation alone did not verify account access.
+- `POST /api/auth/signup` accepts email, password and display name; the Worker saves an empty collector and creates a session. `POST /api/auth/login` checks saved email/password credentials.
+- Email identifiers are trimmed/lowercased with no alias stripping, saved uniquely and left unverified. They cannot promote a collector, link another account or prove owner identity.
+- Passwords contain 15–128 Unicode code points, at most 512 UTF-8 bytes. Store a versioned scrypt hash with a random 16-byte salt, 32-byte output, `N=32768`, `r=8`, `p=3`. Verify hosted runtime performance; never store/log plaintext.
+- Eight-hour opaque cookie sessions use Secure/HttpOnly/SameSite, D1 token digests, current account checks, origin and CSRF protection. Signup/login return `{user, csrfToken, expiresAt}`. Profile data persists in D1; introduction completion remains browser-local.
+- Administrator membership requires a trusted operator to confirm and allowlist the exact account ID. Signup, email, browser flags and the first user cannot grant it. Catalog creation grants no ownership; no claim/award/production/transfer API exists.
 
-**First action in the new chat:** discover the actually available Supabase tools, then list projects read-only and verify authenticated account/project access. A fresh chat may load the connection, but this is not guaranteed. Do not claim project access until a real request succeeds. Do not ask the owner to post service-role keys, database passwords or personal access tokens.
+Verify hosted signup/login and the preserved Spinarium interface, saved rows, empty ownership, rate limits, reload/logout/expiry and direct permission denial after deployed changes. Preserve D1 records and the Pages origin rollback path. Update policies for the actual credential handling and explicitly unavailable reset. Keep InvoHub separate. See [accounts](SPINARIUM-ACCOUNTS.md), [activation](SPINARIUM-ACTIVATION.md) and [deployment](SPINARIUM-CLOUDFLARE.md).
 
-The owner believes an **InvoHub** project already exists in their Supabase account. Its hosted project identity was not verified. The private GitHub repository `CipherLogsPlus/InvoHub` was inspected read-only at `/workspace/InvoHub-inspect`. It uses React 19, TypeScript 5.9, Vite 7 and supabase-js; ordinary checked-in configuration has no hosted project URL or public key. This does **not** prove the hosted project does not exist.
+## Presentation and product to preserve
 
-**Use a separate Spinarium Supabase project under the same account. Do not enable public collector signup in InvoHub.** A real isolated database test of InvoHub's existing migrations confirmed a fail-open administrator authorization check: an absent role can bypass `NOT IN`, and an unprivileged user could promote itself through `manage_user`. Several permission checks also need NULL-safe rejection. No hosted InvoHub data or code was changed. Its repair is a separate security task; do not silently modify it while installing Spinarium.
+The repository development preview remains a frontend-only `admin` / `1234` experience. Active generated production assets use actual password accounts instead. It grants no identity, administrator authority or demo Veilings. Collections are empty; My Collection and Explore Veilings are the two home choices, secondary sections sit behind Menu, and details open only after selecting a card. Current artwork stays until the owner supplies a replacement draft.
 
-## Next work, in order
+Preserve the black-and-blue theme and first-entry ribbon cinematic, browser speech, automatic completion, no Skip button and reduced-motion support. Introduction completion is browser-local. Planned purple Veil artwork without a cube is not an instruction to replace assets now.
 
-1. Verify Supabase account/project access. Inspect existing projects without changing InvoHub. Select or create the dedicated Spinarium project, confirming its identity and isolation before any schema write.
-2. Read [account setup](SPINARIUM-ACCOUNTS.md), [admin setup](SPINARIUM-ADMIN.md), the SQL and [architecture](SPINARIUM-ARCHITECTURE.md). Review/install the schema only in a new dedicated project; its empty-public-schema guard intentionally rejects an existing populated database.
-3. Configure confirmed-email authentication, server-enforced password policy, production confirmation/recovery sender, exact site/redirect URL `https://spindowngames.com/spinarium/` and provider abuse limits. Verify delivery with a real inbox.
-4. Update the existing privacy/account terms accurately for the actual new account processing before activation. Fill `spinarium/config.js` with **only the project URL and public publishable key** after policies are installed and verified. Never put a secret/service-role key in GitHub Pages.
-5. Create/confirm the owner's account and grant its verified user UUID administrator access through the protected server-side allowlist instructions. The owner has not supplied a verified account UUID; do not invent an admin identity.
-6. Verify hosted behavior: new account sees zero owned Veilings and plain black cards; another collector's private data is inaccessible; normal users cannot administer or promote themselves; the allowlisted owner can add/edit content/artwork; catalog creation never grants ownership; logout/recovery/session expiry behave correctly. Local mock tests are not proof of hosted policies or email delivery.
-7. Publish configuration only after real verification, then verify the matching GitHub Pages deployment and live original-site/Spinarium behavior.
+The product is a premium engraved metal collectible plus a digital collection entry. A separate registration card carries a QR and the same one-time claim secret; the physical serial identifies the collectible and is not the secret. Claims and final credential format/security remain separate pending work. Do not add games, transfers, mystery purchases or other roadmap features. Never ask the owner to paste passwords or administrative secrets into chat.
 
-Physical-card claiming remains a separate next milestone. Its token must be cryptographically random, non-sequential, one-use, securely hashed and linked server-side to one physical card. QR and human-readable code represent the same token; serial numbers do not derive it. Claims require atomic redemption, ownership and first-discovery rules plus configurable account/IP/device abuse controls. Failed attempts restrict claims temporarily, not the entire account. Never log plaintext claim secrets.
-
-Do not implement transfers, production automation, randomized paid products, Warpling, manifestations, battles or game systems now. Do not mint ownership from the frontend. Legacy cards have no invented verification. InvoHub integration must later use a clean service/API boundary.
-
-## Local verification and publishing notes
-
-```sh
-python3 -m http.server 8000 --bind 127.0.0.1
-node scripts/verify-spinarium-domain.mjs
-node scripts/verify-spinarium-auth.mjs
-npm install --prefix /tmp/spinarium-db-check --no-audit --no-fund @electric-sql/pglite@0.5.8
-SPINARIUM_PGLITE_MODULE=/tmp/spinarium-db-check/node_modules/@electric-sql/pglite/dist/index.js node scripts/verify-spinarium-backend.mjs
-NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify-spinarium.cjs
-NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify.cjs
-```
-
-Browser tests cover the account gate, no runtime demos, solid-black slots, direct-route/storage-tampering denial, verified empty accounts through test-only provider responses, administrator denial, disabled claims, responsive layouts and accessibility. Backend verification includes actual isolated SQL/RLS behavior as well as adapter contracts. Run the required checks on the final code; do not report hosted verification when only local checks ran.
-
-GitHub access worked through the connector and authenticated `gh api`. Normal git push returned HTTP 401 in this session; REST Git blob/tree/commit/ref creation worked and verified the remote tree matched local files. `/tmp/publish-spinarium-branch.py` documents that workaround but contains the **old foundation branch name**; inspect/adapt it rather than running blindly. Git fetch and PR creation worked. Match the verified PR head when merging, wait for its Pages deployment and check the live page. Do not reset or delete existing repository work to publish.
+The [older Supabase handoff](history/SPINARIUM-HANDOFF-SUPABASE-2026-10-01.md) is historical and superseded. Earlier Auth0 setup is superseded by the latest account instruction; prior verified results remain in the verification record rather than duplicated archives.

@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spinarium-production",
+  "account_id": "3c470b1087f06866d9c36d5f588fcbca",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": ["nodejs_compat"],
+  // Live apex route. GitHub Pages origin DNS values remain available for rollback.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "spindowngames.com/*", "zone_name": "spindowngames.com" }],
+  "assets": {
+    "directory": "./.production-assets",
+    "run_worker_first": ["/api/*"],
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "vars": {
+    "AUTH_PROVIDER": "password",
+    "AUTH_ENABLED": "true",
+    "SIGNUP_ENABLED": "true",
+    "APP_ORIGIN": "https://spindowngames.com",
+    // Retained only for legacy optional-provider type compatibility.
+    "OIDC_ISSUER": "",
+    "OIDC_CLIENT_ID": "",
+    "AUTH0_CONNECTION": ""
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "spinarium-production",
+    "database_id": "ce02e866-1b5b-4495-bf8b-38719a47b344",
+    "migrations_dir": "migrations"
+  }],
+  // R2 remains unbound until artwork storage is provisioned separately.
+  // Password accounts require no Auth0 or OIDC client secret.
+  // Package assets with --production --accounts-enabled --signup-enabled.
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": false }
+  }
+}

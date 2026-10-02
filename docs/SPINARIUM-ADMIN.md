@@ -1,68 +1,39 @@
-# Spinarium accounts and protected catalog administration
+# Spinarium protected administration
 
-The website now has an authenticated service adapter and a protected catalog editor foundation. It is **not connected to a live Supabase project yet**: no Supabase management connector, project URL, publishable key, or SQL provisioning access is available in this session. The shipped configuration remains empty. No accounts, administrator grants, catalog entries, ownership, or backend deployment have been created remotely.
+Workers enforce Spinarium administrator authority. D1 stores the private allowlist and catalog audit; R2 holds protected artwork. Catalog creation and editing never grant collector ownership. The staging Worker and D1 database are deployed, with remote schema/audit verification. R2 remains unconfigured, and no verified owner account, administrator grant or ownership exists. Production accounts are active through the Cloudflare Worker; hosted API, 12 actual account-browser and original-site checks passed. GitHub Pages remains fallback. No administrator grant exists. See [activation](SPINARIUM-ACTIVATION.md).
 
-## Use a separate project
+The former PostgreSQL/Supabase instructions are preserved [as superseded history](history/SPINARIUM-ADMIN-SUPABASE-2026-10-01.md). D1 needs its own migration and Worker authorization; do not install the PostgreSQL schema or assume RLS exists in D1.
 
-Create a **new Spinarium Supabase project under the existing Supabase account**, keeping InvoHub in its original project. Do not enable public Spinarium signup against InvoHub. A read-only inspection found a role-check defect in an InvoHub administrative RPC: a NULL role can bypass `NOT IN` rejection and elevate an unauthorized account. This needs its own verified security correction; this Spinarium work does not modify InvoHub.
+## Trusted administrator provisioning
 
-`supabase/spinarium-schema.sql` intentionally refuses installation when the public schema already contains application tables. Run it once, as the project database owner, in the SQL editor of the new dedicated project. It creates only Spinarium tables/functions, an Auth profile bootstrap trigger, and a private artwork bucket. It contains no production data, demo grants, claim credentials, or unrelated schema changes.
+First create the owner's real password account through Spinarium. Read its actual D1 profile and confirm the exact account ID belongs to the owner through the protected operator workflow. The email-shaped identifier is unverified and cannot establish that authority. Provision that verified profile through trusted D1 SQL using the checked-in schema and a clear grant reason. Never guess a user ID, seed an email alone, or automatically promote the first signup.
 
-## Configuration and first administrator
+Allowlist changes require trusted account/operator access and an attributable operational record. Public routes expose no administrator setter. An absent membership denies access; browser state, email text and a collector's own profile fields cannot override that decision. D1 administrative access can change the database, so restrict operators and retain change records. The application audit covers catalog operations and does not replace Cloudflare operator access controls.
 
-1. Install [the initial migration](../supabase/spinarium-schema.sql) in the new project. Enable email/password Auth and configure confirmation/password-reset redirect URLs for the Spinarium page according to `SPINARIUM-ACCOUNTS.md`.
-2. Put that project's HTTPS URL and **publishable key** in the website's public configuration. A legacy `anon` key can also be used. Never place `service_role`, `sb_secret_*`, database passwords, or management tokens in browser code. The adapter rejects elevated legacy JWT keys and secret-key prefixes.
-3. Create and confirm your collector account using Spinarium's signup flow. A real profile is created from `auth.users`; its membership date is the account creation date. Signup metadata is display text only and has no role authority.
-4. In the dedicated project's SQL editor, identify the confirmed owner's exact Auth user UUID, then seed the private allowlist. Replace the example UUID/email with the verified owner. This operation requires trusted SQL access and is not available from public signup or the browser.
+The D1 table is `admin_allowlist(user_id, granted_at, granted_by)`, referencing `users.id`. Read the actual owner's `users` row and confirm the stable account ID first; neither an email string nor a display name proves it. Through protected operator SQL, add that exact active ID with a current timestamp and identifiable operator in `granted_by`. Record a reason in the operational change record. There is deliberately no copy-and-run example with a fabricated owner ID.
 
-```sql
--- Read the correct confirmed account first; do not guess another user's UUID.
-select id, email, email_confirmed_at from auth.users
-where email = 'owner@example.com';
+See [the Cloudflare migration guide](SPINARIUM-CLOUDFLARE.md) for staging setup. R2 setup blocks private artwork operations but does not block account signup/login. Password reset remains unavailable for all accounts. Collector signup/login can be activated after hosted account checks pass, while admin operations stay denied until a trusted allowlist grant and the associated checks are complete. The preview `admin` username is unrelated to the allowlist.
 
--- Run only after verifying the UUID and confirmed email above.
-insert into private.spinarium_admins (user_id, note)
-values ('11111111-1111-4111-8111-111111111111', 'Initial verified SpinDownGames owner');
-```
+## Catalog and artwork
 
-5. Sign in again and open Spinarium's Admin route. The interface calls the server RPC `is_spinarium_admin()`; network errors, missing schema, absent/expired sessions, and non-true responses deny administrator access. SQL RLS independently authorizes every catalog/artwork action, including calls made outside the interface.
+The protected API validates accepted fields and server-generated IDs. Administrators can manage Veiling catalog descriptions, status and labels independently of ownership. Catalog status is editorial metadata; it is not an enforceable batch retirement or production limit. Those operations remain outside this milestone. Draft content is currently withheld from collector projections; an approved content/revision policy is required before issuing real ownership so catalog edits cannot hide purchased content.
 
-New accounts own zero Veilings and have zero completed collections/awards/discoveries. Empty decorative card slots are layout placeholders, not inventory or undiscovered catalog entries. Merely adding a definition in Admin does not give it to any collector. The read adapter never falls back to the demo dataset when a configured backend fails.
+Artwork is stored in a private R2 binding and served only after Worker authorization. Collectors need ownership of the corresponding non-draft, revealed Veiling and may read only its currently attached artwork; administrators need an actual allowlist entry. Keep existing public concept art unchanged. Do not enable an R2 public bucket or expose its development URL for private collector assets. An object key is not permission.
 
-## Editor operations
+Uploads accept PNG, JPEG or WebP with matching signatures, up to 8 MiB. Random object keys preserve previous uploads rather than overwriting them; administrators may inspect historical artwork. R2 and D1 cannot share a transaction. A failed database attachment/audit triggers cleanup of the new object; failed cleanup can leave a private inaccessible orphan for later operator review. The initial administrator list is capped at 200 rows and has no pagination yet.
 
-An authorized administrator can create/update actual Veiling definitions with a name, description/lore, optional character number, configurable rarity text, edition text, and `draft`, `active`, or `retired` status. Number and text limits are validated both in the adapter and in PostgreSQL. Unknown fields cannot mass-assign administrator roles, account ownership, or audit metadata. Primary IDs and system timestamps are server-generated/protected.
+Catalog writes append an audit event in the same D1 operation batch. Audit details identify the actor and target and retain catalog before/after snapshots, including editorial descriptions, without copying passwords, provider tokens, artwork contents or claim secrets. Audit update/delete triggers protect records from application mutation. Catalog changes and artwork attachment require a matching revision through `If-Match`; stale edits fail rather than overwriting newer content. Application endpoints offer no ownership issuance, authority setter or audit mutation. Failures produce safe responses, never raw credential-bearing provider errors.
 
-Artwork upload accepts PNG, JPEG, or WebP, at most 8 MB. The adapter checks media type and file signatures. The private Storage bucket also enforces MIME and size limits. Objects use `<veiling-uuid>/<random-uuid>.<extension>` paths; original filenames are not retained. Uploads never overwrite an existing file. The editor attaches a successful new upload by updating that Veiling's artwork path. The database checks that the path belongs to its Veiling.
+Send the returned numeric revision as a quoted `If-Match` value for PATCH and artwork attachment. The revision is not an editable catalog body field. Missing revision returns 428; a stale revision returns 409. Reload the current row and resolve the edit before retrying.
 
-The adapter offers **no deletion methods**. Replacing artwork preserves the previous source object. If an upload succeeds but attaching the path fails, an unused private object can remain; report/review it administratively rather than silently deleting content. There is no automatic cleanup in this milestone.
+## Required hosted checks
 
-Every definition insert/update records the authenticated actor, target ID, action, timestamp, and changed column names in a private audit table. Descriptions, artwork contents, passwords, access tokens, and claim secrets are not copied into audit details. Ordinary application roles cannot read or mutate administrator authority/audit tables, and a trigger rejects audit row updates/deletes. Trusted database-owner access remains an operational responsibility.
+- A fresh collector is empty and cannot read another collector's data.
+- Unauthenticated, expired-session and non-admin requests cannot administer the catalog or artwork, even when made directly outside the UI.
+- Metadata/body tampering cannot promote a collector or change ownership.
+- The verified administrator can create/edit catalog content and upload/read authorized artwork; each mutation produces the expected audit record.
+- Creating or publishing a Veiling changes catalog records only and grants no collector ownership.
+- An owner can read its authorized artwork, while an unowned collector and unauthenticated requester cannot retrieve it.
+- Same-origin and CSRF checks reject unauthorized mutations; disabled authentication does not allow preview cookies or usernames to access protected APIs.
 
-The initial SQL administrator grant records its grant date, granting user when supplied, and note in the protected allowlist. It does not create a separate immutable authority-change audit event. Before introducing routine administrative role management or ownership issuance/transfers, add authoritative audit/provenance transactions for those operations; the current immutable audit covers catalog edits only.
-
-## Read and ownership boundary
-
-`createSpinariumService(config, auth)` uses the real in-memory Auth access token to call Supabase REST, RPC, and private Storage endpoints. Requests omit cookies, prohibit redirects, and disable cache persistence. Data errors do not copy raw backend messages or credential-bearing URLs into application logs. No elevated server credential is used.
-
-`spinarium_dashboard()` returns a versioned `schemaVersion: '1'`, `mode: 'live'` projection using the authenticated user ID, not a user ID supplied by a request body. It returns only that collector's ownership and corresponding Veiling definitions. Hidden/unowned character names, numbers, artwork paths, and descriptions never enter that response. A separate admin catalog read is protected by allowlist-backed RLS. Private assets are opened with short-lived signed URLs (five minutes); their bearer nature and expiry must be considered when adding telemetry. Signed URLs must not be logged or made public.
-
-`spinarium_ownerships` has read-own policies and no browser insert/update/delete grant, **including for catalog administrators**. Neither the editor, signup flow, nor read adapter grants ownership. There is no claim redemption implementation. Physical-card instances/serials, credential generation, verified ownership issuance, and production automation remain future trusted backend work; the current physical-card projection is empty rather than invented.
-
-Global first discovery is stored independently in `spinarium_discoveries`. It has no browser writes. A future verified claim transaction must atomically create ownership and the appropriate first-discovery record before publishing a reveal. Other collectors' private discoverer IDs are not exposed; only a permitted public discoverer name is projected. No achievements are fabricated: achievement and collection arrays are currently empty until authoritative definitions/award services exist.
-
-The current editor uses rarity/edition labels on a definition and one primary artwork path. The read projection maps them to the existing edition/variant/artwork component contract; those projected IDs do not represent manufactured edition/batch records. Rarity sorting is alphabetical until a configurable ranked rarity catalog is added. Publication/retirement status currently describes the catalog definition, not an enforceable manufacturing count. Dedicated production/edition models must enforce retirement/count limits before production tools are enabled.
-
-Draft status is editorial metadata, not a separate publication access barrier in this schema. An administrator can read all definitions, and an authorized owner can read their definition/artwork even if its status is draft or retired. There is currently no ownership issuance flow. Before issuing actual owned cards, implement a versioned publication/reveal policy and transactional ownership provenance; do not silently reinterpret a status edit as a secure release or production-retirement operation.
-
-## Local verification and handoff
-
-The backend checks exercise adapter error handling, fail-closed admin access, owned-only projections, private artwork upload rules, and the actual migration in an isolated PostgreSQL-compatible PGlite database. They do **not** connect to or change a hosted Supabase project.
-
-```sh
-# Development-only test dependency; it is not shipped to visitors.
-npm install --prefix /tmp/spinarium-db-check @electric-sql/pglite@0.5.8
-SPINARIUM_PGLITE_MODULE=/tmp/spinarium-db-check/node_modules/@electric-sql/pglite/dist/index.js node scripts/verify-spinarium-backend.mjs
-```
-
-The isolated database stubs only Supabase's platform roles/Auth/Storage tables, then executes the unchanged checked-in migration. Tests verify actual role grants/RLS behavior, NULL-role rejection, metadata spoof rejection, catalog and artwork isolation, no browser ownership grant, profile bootstrap, immutable audit rows, and real empty-member projections. A final live smoke test remains necessary after project provisioning: real confirmed signup/signin/reset, SQL allowlist grant, admin create/update/upload, non-admin denial, private Storage signing, and zero collection counts for new users.
+Local isolated checks and hosted staging checks must be recorded separately. Accounts are active; claims, production authority, discoveries, achievements, transfers, mystery purchases and games remain unavailable. InvoHub continues behind a separate service boundary with no shared credentials or database binding.

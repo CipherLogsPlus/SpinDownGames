@@ -4,3 +4,7 @@ test-results/
 *.stl
 .env
 .env.*
+.dev.vars
+.dev.vars.*
+.wrangler/
+cloudflare/spinarium-worker/dist/

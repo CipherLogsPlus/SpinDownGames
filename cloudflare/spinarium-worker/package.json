@@ -1,0 +1,31 @@
+{
+  "name": "spinarium-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "types": "wrangler types --strict-vars false --include-runtime false",
+    "check": "tsc --noEmit",
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=browser --target=es2022 --external:node:* --outfile=dist/index.js",
+    "test": "npm run build && node --import tsx --test test/*.test.ts",
+    "db:migrate:local": "wrangler d1 migrations apply spinarium-local --local",
+    "dry-run": "wrangler deploy --dry-run",
+    "prepare:staging": "node scripts/prepare-staging-assets.mjs",
+    "dry-run:staging": "npm run prepare:staging && wrangler deploy --config wrangler.staging.jsonc --dry-run",
+    "prepare:production": "node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled",
+    "dry-run:production": "npm run prepare:production && wrangler deploy --config wrangler.production.jsonc --dry-run"
+  },
+  "dependencies": {
+    "oauth4webapi": "3.8.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261002.1",
+    "@types/node": "26.6.4",
+    "esbuild": "0.28.2",
+    "jose": "6.2.12",
+    "miniflare": "5.20261001.0-alpha",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "wrangler": "4.147.0"
+  }
+}

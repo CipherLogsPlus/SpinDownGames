@@ -1,0 +1,48 @@
+name: Spinarium checks
+
+on:
+  pull_request:
+    paths:
+      - "spinarium/**"
+      - "cloudflare/**"
+      - "scripts/verify-spinarium*"
+      - ".github/workflows/spinarium-checks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "spinarium/**"
+      - "cloudflare/**"
+      - "scripts/verify-spinarium*"
+      - ".github/workflows/spinarium-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cloudflare/spinarium-worker
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: cloudflare/spinarium-worker/package-lock.json
+      - run: npm ci
+      - run: npm run types && git diff --exit-code -- worker-configuration.d.ts
+      - run: npm run check
+      - run: npm test
+      - run: npm run dry-run
+      - run: npm run dry-run:staging
+      - run: npm run dry-run:production
+      - name: Browser adapter and collection contracts
+        run: |
+          node ../../scripts/verify-spinarium-cloudflare.mjs
+          node ../../scripts/verify-spinarium-domain.mjs
+          node ../../scripts/verify-spinarium-intro.mjs
