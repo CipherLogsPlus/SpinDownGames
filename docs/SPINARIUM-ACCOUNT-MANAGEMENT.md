@@ -1,6 +1,6 @@
 # Spinarium account management
 
-This feature adds account administration to the existing real email/password login. It does not introduce a shared administrator password or a second identity service. The account-management migration is applied to staging, while the matching staged release is being deployed. Hosted flow verification, production activation and owner provisioning remain pending; see [VERIFICATION.md](../VERIFICATION.md).
+Account administration is live alongside the existing real email/password login. The migration and matching Worker/assets are deployed to staging and production, and each environment passed all 16 actual hosted account/browser checks. The final original-site hosted suite passed all 29 checks. The designated saved account is provisioned as the sole owner. Sign in again, then open **Menu → Accounts**. No shared administrator password or second identity service is introduced. See [VERIFICATION.md](../VERIFICATION.md) for the evidence.
 
 ## Access levels
 
@@ -20,7 +20,7 @@ After signing in with an authorized account, open **Menu → Accounts**. The acc
 
 Select an account to inspect its profile, role, access status, creation date, last successful sign-in when recorded, active-session count, collection records, and administrative history. Passwords, password hashes, session tokens, reset credentials already issued, and claim secrets never appear in account projections. Existing accounts can have an unknown historical last-sign-in time until their next successful sign-in.
 
-Supported actions are changing a display name, disabling/restoring access, signing out an account's sessions, issuing a password-reset link, and—only for the owner—appointing or removing a regular administrator. Each action requires a reason and checks the selected account's revision. A conflicting change requires a fresh account view and a new decision; it must not silently overwrite another administrator's work.
+Supported actions are changing a display name, disabling/restoring access, signing out an account's sessions, issuing a password-reset link, and—only for the owner—appointing or removing a regular administrator. Role changes require an active account; restore a disabled target before changing its role. Each action requires a reason and checks the selected account's revision. A conflicting change requires a fresh account view and a new decision; it must not silently overwrite another administrator's work.
 
 Disabling an account blocks sign-in and revokes its sessions. Restoring it requires a new sign-in; old sessions stay invalid. Role changes, explicit session revocation and reset-link issuance also revoke the target's sessions. Account changes invalidate the target's previous reset link; destructive access changes also invalidate links issued by that account. There is no account deletion, password viewer, account impersonation, or email-identifier change in this release. Account-management actions do not grant Veilings, claims, discoveries, achievements, or production authority.
 
@@ -36,7 +36,7 @@ Never copy a password, session cookie, or reset link into a repository, ordinary
 
 ## Owner provisioning and operation
 
-The owner explicitly designated the sole account they had just created and could sign into. The trusted operator resolved its real server-generated account ID and creation record. This is a one-time owner-directed grant to that specific account, not an automatic first-signup rule and not a grant based on an unverified email alone.
+The owner explicitly designated the sole account they had just created and could sign into. The trusted operator resolved its real server-generated account ID and creation record, then provisioned that exact active account through a guarded transaction. The owner role, single-owner count and grant audit were verified; existing sessions were revoked so a fresh sign-in is required. The operator did not sign in as the owner. This is a one-time owner-directed grant to that specific account, not an automatic first-signup rule and not a grant based on an unverified email alone.
 
 Before granting access, verify the exact existing account is active, its immutable account/creation identifiers match the designation, and no different owner already exists. Use trusted Cloudflare D1 access to add that exact account to the private allowlist as owner with an attributable grant reason. Do not seed a guessed UUID, publish the owner's identifiers, or create credentials on their behalf. Verify the resulting role and protected API behavior without asking for the owner's password or session cookie.
 

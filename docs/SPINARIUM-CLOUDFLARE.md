@@ -14,7 +14,7 @@ The earlier disabled deployment returned HTTP 200 from `/api/health`, with accou
 
 Production D1 `spinarium-production` (`ce02e866-1b5b-4495-bf8b-38719a47b344`) has also been created with foundation/password migrations and ledger applied. It received both migrations and now backs the active production Worker. Route `spindowngames.com/*` (ID `0689578f458d4124809042de5d84fe40`) is active with 43 public assets and `_headers` metadata. The four apex A records are proxied but retain `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, and `185.199.111.153`; `www` remains a DNS-only CNAME to `cipherlogsplus.github.io`. Always Use HTTPS is enabled; the active Full SSL mode, repository `CNAME` and Pages deployment are preserved. Initial stale-DNS requests reached the old Pages response before propagation; fresh health requests returned HTTP 200 with accounts enabled and claims disabled.
 
-R2 still returns `10042`; no bucket exists. Email-service access returned `2036 Unauthorized`. Neither blocks saving accounts or password login. R2 blocks private artwork work. The currently deployed login release has no reset; a pending account-management update adds administrator-assisted recovery without email delivery. Automatic email recovery remains unavailable. Preserve the unrelated existing Worker and InvoHub.
+R2 still returns `10042`; no bucket exists. Email-service access returned `2036 Unauthorized`. Neither blocks saving accounts or password login. R2 blocks private artwork work. Active administrator-assisted recovery needs no email delivery and passed actual account verification in both environments. Automatic email recovery remains unavailable. Preserve the unrelated existing Worker and InvoHub.
 
 ## Direct credential backend
 
@@ -38,11 +38,13 @@ Sessions use an opaque Secure, HttpOnly cookie, a D1 token digest, eight-hour ex
 | `POST /api/admin/veilings/:id/artwork` | Administrator artwork upload/attachment; private R2 required. |
 | `GET /api/artwork/:artworkId` | Administrator or authorized owner of current non-draft/revealed artwork. |
 
-The deployed login release has no reset or role-mutation endpoint. The pending update below adds constrained administration and assisted reset; claims, ownership issuance, discovery/achievement awards and production remain unavailable.
+The account-management release below adds constrained administration and assisted reset. Claims, ownership issuance, discovery/achievement awards and production authority remain unavailable.
 
-## Pending account-management update
+## Account-management release
 
-`0003_account_management.sql` extends the private allowlist with owner/admin roles and a single-owner constraint, adds account revision/last-sign-in fields, indexed directory search, single-use password-reset digests and append-only account audit. Cached directory fields accelerate reads; authorization uses the current allowlist/session and rechecks it inside writes. The migration and ledger were applied to the initially empty staging database, with 36 statements completed. Matching staging deployment is in progress; hosted flow verification, production migration/deployment and the exact owner grant remain pending.
+`0003_account_management.sql` extends the private allowlist with owner/admin roles and a single-owner constraint, adds account revision/last-sign-in fields, indexed directory search, single-use password-reset digests and append-only account audit. Cached directory fields accelerate reads; authorization uses the current allowlist/session and rechecks it inside writes. The migration and ledger completed 36 statements in each of staging and production. Matching Worker/assets are deployed in both environments, now with 45 served public files. Each environment passed all 16 actual account/browser checks; the final original-site hosted suite passed all 29. Fresh production health returned 200 with accounts enabled and claims disabled. The owner's exact designated saved account is provisioned as the sole owner through an audited guarded transaction, with all its previous sessions revoked. The operator did not sign in as the owner. See [VERIFICATION.md](../VERIFICATION.md).
+
+Preserve the exact-apex Cloudflare configuration rule setting `disable_rum: true`. It prevents an edge-injected analytics beacon that appeared in browser HTML even with the zone RUM setting off. The final browser run made no third-party requests, and served homepage/Spinarium HTML matched repository bytes. Rule identifiers and the resolved regression are recorded in [verification](../VERIFICATION.md); no application source or artwork change was needed.
 
 Only a trusted operator can provision or transfer the owner role. The owner alone can appoint/remove regular administrators through the management API. Regular administrators manage collectors; the owner can also manage regular administrators. Self display-name updates are allowed; destructive owner/self actions are denied. None of these operations grant ownership.
 
@@ -86,7 +88,7 @@ npm run prepare:production
 npm run dry-run:production
 ```
 
-`prepare:production` runs `node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled`. It generates `.production-assets` with preview disabled, `/api` enabled, signup enabled and no credentials. The allowlist excludes backend source, migrations, documentation, dependencies, legacy/demo adapters and Git metadata. The account-management package contains 45 served files plus `_headers`, extending the original 43-file live login package. The production configuration enables password/auth/signup and uses the production D1 ID and apex route; generating or dry-running it does not deploy this pending update.
+`prepare:production` runs `node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled`. It generates `.production-assets` with preview disabled, `/api` enabled, signup enabled and no credentials. The allowlist excludes backend source, migrations, documentation, dependencies, legacy/demo adapters and Git metadata. The deployed account-management package contains 45 served files plus `_headers`, extending the original 43-file login package. The production configuration enables password/auth/signup and uses the production D1 ID and apex route. Generating or dry-running it makes no hosted changes.
 
 `dry-run:production` prepares those assets and runs `wrangler deploy --config wrangler.production.jsonc --dry-run`. It passed locally and is included in CI; it does not change hosted resources. To deploy a verified update through an authenticated CLI, check `npx wrangler whoami`, then use `npx wrangler deploy --config wrangler.production.jsonc`. This session deployed through the authenticated connector; its authorization does not authenticate Wrangler. Never deploy the default local configuration to production, and inspect migration state before applying any pending remote migration.
 

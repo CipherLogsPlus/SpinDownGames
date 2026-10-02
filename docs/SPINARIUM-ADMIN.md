@@ -1,6 +1,6 @@
 # Spinarium protected administration
 
-Workers enforce Spinarium administrator authority. D1 stores the private allowlist and account/catalog audit; R2 is reserved for protected artwork. Catalog creation and editing never grant collector ownership. Production password accounts are active through the Cloudflare Worker, and GitHub Pages remains fallback. The owner has designated their existing account for the new account-management release. Its deployment and exact owner grant are pending verification; see [account management](SPINARIUM-ACCOUNT-MANAGEMENT.md) and [VERIFICATION.md](../VERIFICATION.md). R2 remains unconfigured.
+Workers enforce Spinarium administrator authority. D1 stores the private allowlist and account/catalog audit; R2 is reserved for protected artwork. Catalog creation and editing never grant collector ownership. Production password accounts are active through the Cloudflare Worker, and GitHub Pages remains fallback. Account management is deployed and passed all 16 actual account/browser checks in each of staging and production. The owner's exact designated saved account is the sole owner; sign in again and open **Menu → Accounts**. See [account management](SPINARIUM-ACCOUNT-MANAGEMENT.md) and [VERIFICATION.md](../VERIFICATION.md). R2 remains unconfigured.
 
 The former PostgreSQL/Supabase instructions are preserved [as superseded history](history/SPINARIUM-ADMIN-SUPABASE-2026-10-01.md). D1 needs its own migration and Worker authorization; do not install the PostgreSQL schema or assume RLS exists in D1.
 
@@ -14,7 +14,7 @@ The account-management migration extends `admin_allowlist(user_id, granted_at, g
 
 The account-management directory is behind **Menu → Accounts** and uses indexed server pagination, explicit search fields and role/status filters. The owner can manage regular administrators and collectors. Regular administrators can manage collectors only. Self/owner access controls prevent accidental lockout; self display-name changes remain allowed. Account changes use reasons, revision checks, current session/role checks and immutable audit records. Disabling, role changes, session revocation and password reset invalidate the relevant access credentials. See the [complete account-management guide](SPINARIUM-ACCOUNT-MANAGEMENT.md).
 
-See [the Cloudflare migration guide](SPINARIUM-CLOUDFLARE.md) for staging setup. R2 setup blocks private artwork operations but does not block account signup/login. After the pending release is deployed and verified, assisted recovery lets an authorized administrator issue a 15-minute single-use link after checking a support request. It sends no email and never reveals the current password. Automatic email recovery remains unavailable. The preview `admin` username is unrelated to the allowlist.
+See [the Cloudflare deployment guide](SPINARIUM-CLOUDFLARE.md). R2 setup blocks private artwork operations but does not block account signup/login. Assisted recovery lets an authorized administrator issue a 15-minute single-use link after checking a support request. It sends no email and never reveals the current password. The flow passed actual staging and production account verification. Automatic email recovery remains unavailable. The preview `admin` username is unrelated to the allowlist.
 
 ## Catalog and artwork
 

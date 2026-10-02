@@ -18,13 +18,13 @@ Introduction completion remains browser-local. No per-account introduction field
 
 ## Recovery and artwork limits
 
-The production login release has no password reset, including for accounts using a real mailbox. An account-management update adds administrator-assisted recovery through a private, 15-minute single-use reset link. Its migration is applied to staging; hosted verification, production deployment and owner provisioning remain pending. See [account management](SPINARIUM-ACCOUNT-MANAGEMENT.md). Automatic email recovery remains unavailable: email sending is not configured, and an email-service access check returned `2036 Unauthorized`. Supplying a real email does not enable automatic recovery.
+Administrator-assisted recovery uses a private, 15-minute single-use reset link after an authorized administrator checks the support request. The deployed account-management flow passed all 16 actual account/browser checks in each of staging and production. See [account management](SPINARIUM-ACCOUNT-MANAGEMENT.md). Automatic email recovery remains unavailable: email sending is not configured, and an email-service access check returned `2036 Unauthorized`. Supplying a real email does not enable automatic recovery.
 
 R2 setup remains unavailable with error `10042`. This blocks private artwork administration, not signup, login or saving accounts in D1. The empty-collection account milestone does not need an artwork bucket or email sender.
 
 ## Authorization and verification
 
-The account-management update defines one operator-provisioned owner and regular administrators. Only the owner may appoint or remove regular administrators; administrators manage collectors, while the owner may also manage regular administrators. These features and the designation of the owner's existing account are pending deployment and verification. Signup never promotes a collector; email, profile text, browser flags and the first account do not grant authority. Catalog creation never creates ownership. InvoHub remains a separate service.
+The account-management release defines one operator-provisioned owner and regular administrators. Only the owner may appoint or remove regular administrators; administrators manage collectors, while the owner may also manage regular administrators. The owner's exact designated saved account is provisioned as the sole owner, with existing sessions revoked and an audited grant. Sign in again to use **Menu → Accounts**. Signup never promotes a collector; email, profile text, browser flags and the first account do not grant authority. Catalog creation never creates ownership. InvoHub remains a separate service.
 
 Keep verifying real hosted signup, failed login, reload persistence, expiry/logout, duplicate-account behavior, CSRF/origin rejection, rate limits and collector/admin denial against deployed changes. Local tests and prior OIDC fixtures are separate evidence. Preserve the Pages rollback path and D1 account data during updates. See [activation](SPINARIUM-ACTIVATION.md), [Cloudflare deployment](SPINARIUM-CLOUDFLARE.md) and [administration](SPINARIUM-ADMIN.md).
 
