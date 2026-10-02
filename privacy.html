@@ -67,16 +67,26 @@
           The service processes your password to create or check a salted,
           slow password hash. It stores the hash rather than your plaintext
           password. D1 also stores an application account ID, display name,
-          account dates and status, server session records, and security records
-          used to limit repeated requests. Collection records link to the
-          application account; trusted administrators’ catalog changes are
-          recorded for accountability. New accounts start with no owned Veilings.
+          account dates and status, the last successful sign-in when recorded,
+          server session records, and security records used to limit repeated
+          requests. Collection records link to the application account. Trusted
+          administrators can review account identifiers, profiles, access roles and status,
+          session counts, and collection records to provide support and manage
+          access. Account and catalog changes record the administrator, affected
+          account or item, time, and relevant changes for accountability.
+          Administrative account changes also record the supplied reason.
+          New accounts start with no owned Veilings.
         </p>
         <p>
-          Email sending and password reset are not configured, so password
-          recovery is unavailable for every account, including accounts using
-          a real email address. Account access depends on your password and
-          current server session. Session expiry limits access; it does not
+          Automatic email-based password recovery is not available. After
+          checking an account support request, an administrator can provide a
+          temporary, single-use password-reset link through an agreed private
+          contact channel. The service stores a digest of the reset credential
+          and its expiry, and records reset issuance and completion. Keep this
+          link private: anyone holding a valid link can set a new password for
+          its account. Administrators cannot view your current password.
+          Account access depends on your password and current server session.
+          Session expiry limits access; it does not
           promise immediate deletion of stored records. To ask about account
           information or request its correction or deletion, use the private
           contact options below.

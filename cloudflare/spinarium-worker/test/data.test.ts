@@ -53,13 +53,13 @@ test('protected endpoints reject anonymous, expired, disabled, and forged identi
     assert.equal((await h.fetch(path, { headers: { Cookie: disabled.cookie } })).status, 401);
     assert.equal((await h.fetch(path, { headers: { Authorization: `Bearer ${admin.token}`, 'X-User-Id': admin.id, 'X-Role': 'admin' } })).status, 401);
   }
-  assert.deepEqual(await (await h.fetch('/api/admin/access', { headers: collector.headers })).json(), { admin: false });
+  assert.deepEqual(await (await h.fetch('/api/admin/access', { headers: collector.headers })).json(), { admin: false, role: null });
   assert.equal((await h.fetch('/api/admin/veilings', {
     ...mutation(collector, { name: 'Forbidden', userId: admin.id, admin: true }),
     headers: { ...collector.headers, 'Content-Type': 'application/json', 'X-User-Id': admin.id, 'X-Role': 'admin' },
   })).status, 403);
   await h.db.prepare('DELETE FROM admin_allowlist WHERE user_id=?').bind(admin.id).run();
-  assert.deepEqual(await (await h.fetch('/api/admin/access', { headers: admin.headers })).json(), { admin: false });
+  assert.deepEqual(await (await h.fetch('/api/admin/access', { headers: admin.headers })).json(), { admin: false, role: null });
   assert.equal((await h.fetch('/api/admin/veilings', mutation(admin, { name: 'Revoked' }))).status, 403);
   assert.equal(await h.db.prepare('SELECT count(*) n FROM catalog_veilings').first('n'), 0);
 });

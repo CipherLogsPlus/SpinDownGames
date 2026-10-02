@@ -29,7 +29,7 @@ export async function createHarness(overrides: Partial<Env> = {}, outbound?: (re
   const env = await mf.getBindings<Env>();
   const db = env.DB;
   const r2 = env.ARTWORK;
-  for (const file of ["0001_foundation.sql", "0002_password_accounts.sql"]) {
+  for (const file of ["0001_foundation.sql", "0002_password_accounts.sql", "0003_account_management.sql"]) {
     const migration = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
     const statements = migration.split(/;\s*(?:\n|$)/).filter((statement) => statement.trim());
     for (const statement of statements) await db.prepare(statement).run();
@@ -41,7 +41,7 @@ export async function createHarness(overrides: Partial<Env> = {}, outbound?: (re
 }
 
 export async function seedSession(db: D1Database, options: {
-  id?: string; admin?: boolean; disabled?: boolean; expiresAt?: number; token?: string; csrfToken?: string;
+  id?: string; admin?: boolean; owner?: boolean; disabled?: boolean; expiresAt?: number; token?: string; csrfToken?: string; displayName?: string; email?: string;
 } = {}) {
   const id = options.id ?? crypto.randomUUID();
   const token = options.token ?? Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
@@ -50,11 +50,13 @@ export async function seedSession(db: D1Database, options: {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = options.expiresAt ?? now + 3600;
   await db.prepare(`INSERT INTO users (id,oidc_issuer,oidc_subject,display_name,disabled,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`)
-    .bind(id, "https://identity.test", id, "Test Collector", options.disabled ? 1 : 0, now, now).run();
+    .bind(id, "https://identity.test", id, options.displayName ?? "Test Collector", options.disabled ? 1 : 0, now, now).run();
+  if (options.email) await db.prepare("INSERT INTO password_accounts(user_id,email_normalized,password_hash,created_at,updated_at) VALUES (?,?,?,?,?)")
+    .bind(id, options.email.toLowerCase(), "local-fixture-noncredential", now, now).run();
   await db.prepare(`INSERT INTO sessions (token_hash,user_id,csrf_token,created_at,expires_at) VALUES (?,?,?,?,?)`)
     .bind(hash, id, csrfToken, Math.min(now - 1, expiresAt - 3600), expiresAt).run();
-  if (options.admin) await db.prepare("INSERT INTO admin_allowlist(user_id,granted_at,granted_by) VALUES (?,?,?)")
-    .bind(id, now, "test-only trusted operator").run();
+  if (options.admin || options.owner) await db.prepare("INSERT INTO admin_allowlist(user_id,granted_at,granted_by,role) VALUES (?,?,?,?)")
+    .bind(id, now, "test-only trusted operator", options.owner ? "owner" : "admin").run();
   return {
     id, token, hash, csrfToken,
     cookie: `__Host-spinarium_session=${token}`,

@@ -3,6 +3,7 @@
  * mutation is authorized by the Worker; browser routes never grant permission.
  */
 import { cloudflareConnection } from "../auth/cloudflare-auth.js";
+import { createAdminAccountService } from "./admin-account-service.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ARTWORK = /^\/api\/artwork\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -15,7 +16,7 @@ const MESSAGES = Object.freeze({
   CONFIGURATION_REQUIRED: "Spinarium’s secure backend is not configured yet.",
   AUTH_REQUIRED: "Your session changed or ended. Sign in and try again.",
   ACCESS_DENIED: "This account cannot perform that action.",
-  INVALID_INPUT: "Check the Veiling fields and artwork and try again.",
+  INVALID_INPUT: "Check the submitted fields and try again.",
   INVALID_PROJECTION: "The backend returned an incompatible collection record.",
   NOT_FOUND: "The Veiling could not be found. Reload the catalog and try again.",
   NETWORK_ERROR: "Spinarium could not reach its backend. Please try again.",
@@ -26,6 +27,8 @@ const MESSAGES = Object.freeze({
   REVISION_REQUIRED: "Reload this Veiling before saving or uploading artwork.",
   STALE_REVISION: "This Veiling has changed. Reload the catalog before saving again.",
   NUMBER_IN_USE: "This character number is already in use. Choose another number.",
+  ACCOUNT_CHANGED: "This account has changed. Review its current details and confirm the action again.",
+  PROTECTED_ACCOUNT: "This account is protected from that action.",
 });
 export class SpinariumServiceError extends Error {
   constructor(code) {
@@ -67,7 +70,7 @@ function catalogRow(row) {
   };
 }
 
-export function createSpinariumService(config, auth, { fetchImpl = globalThis.fetch } = {}) {
+export function createSpinariumService(config, auth, { fetchImpl = globalThis.fetch, origin = globalThis.location?.origin } = {}) {
   const connection = cloudflareConnection(config);
   function captureIdentity() {
     if (connection.error) throw new SpinariumServiceError("CONFIGURATION_REQUIRED");
@@ -108,11 +111,13 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
     const failure = { 400: "INVALID_INPUT", 403: "ACCESS_DENIED", 404: "NOT_FOUND",
       409: "STALE_REVISION", 428: "REVISION_REQUIRED", 429: "RATE_LIMITED", 503: "BACKEND_UNAVAILABLE" };
     if (!response.ok) {
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 403) {
         let errorCode;
         try { errorCode = (await response.json())?.code; } catch { /* Only known codes are read. */ }
         assertIdentity(identity);
         if (errorCode === "NUMBER_IN_USE") throw new SpinariumServiceError("NUMBER_IN_USE");
+        if (errorCode === "ACCOUNT_CHANGED") throw new SpinariumServiceError("ACCOUNT_CHANGED");
+        if (errorCode === "PROTECTED_ACCOUNT") throw new SpinariumServiceError("PROTECTED_ACCOUNT");
       }
       throw new SpinariumServiceError(failure[response.status] || "BACKEND_ERROR");
     }
@@ -128,6 +133,13 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
       const result = await request("/admin/access", { signal });
       return result?.admin === true;
     } catch { return false; }
+  }
+  async function getAdminContext({ signal } = {}) {
+    const result = await request("/admin/access", { signal });
+    if (typeof result?.admin !== "boolean" || ![null, "admin", "owner"].includes(result.role) ||
+      result.admin !== (result.role === "admin" || result.role === "owner"))
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    return { admin: result.admin, role: result.role };
   }
   async function getDashboard({ signal } = {}) {
     const identity = captureIdentity();
@@ -201,7 +213,8 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
   }
   return Object.freeze({
     configured: !connection.error,
-    getDashboard, getAdminAccess, listAdminVeilings, saveVeiling, uploadArtwork,
+    getDashboard, getAdminAccess, getAdminContext, listAdminVeilings, saveVeiling, uploadArtwork,
+    ...createAdminAccountService({ request, ErrorClass: SpinariumServiceError, origin }),
     getCapabilities: () => ({ authentication: !connection.error, claims: false,
       transfers: false, notifications: false, threeDimensionalView: false }),
   });

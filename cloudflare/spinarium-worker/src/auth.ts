@@ -2,6 +2,7 @@ import * as oauth from 'oauth4webapi';
 import { HttpError, json } from './http';
 import type { Env } from './types';
 import { handlePasswordAuth } from './password-auth';
+import { handlePasswordReset } from './password-reset';
 import { applicationConfig, assertRequestOrigin, cookie, clearCookie, epoch, hashToken, readCookie, requireCsrf, requireSession, SESSION_COOKIE, SESSION_TTL, sessionProjection, token, TOKEN_PATTERN } from './session';
 export { hashToken, requireCsrf, requireSession } from './session';
 export type { AuthSession } from './session';
@@ -199,7 +200,9 @@ async function callback(request: Request, env: Env, config: AuthConfig, dependen
       (id, oidc_issuer, oidc_subject, display_name, disabled, created_at, updated_at)
       SELECT ?, ?, ?, ?, 0, ?, ?
       WHERE ? = 1 OR EXISTS (SELECT 1 FROM users WHERE oidc_issuer = ? AND oidc_subject = ?)
-      ON CONFLICT(oidc_issuer, oidc_subject) DO UPDATE SET display_name = excluded.display_name, updated_at = excluded.updated_at
+      -- Existing names may have been edited by a trusted administrator. Login
+      -- keeps them and their account revision intact instead of refreshing them.
+      ON CONFLICT(oidc_issuer, oidc_subject) DO UPDATE SET oidc_subject = excluded.oidc_subject
       RETURNING id, disabled`)
       .bind(crypto.randomUUID(), config.issuer.href, claims.sub, displayName, now, now,
         env.SIGNUP_ENABLED === 'true' ? 1 : 0, config.issuer.href, claims.sub)
@@ -207,10 +210,17 @@ async function callback(request: Request, env: Env, config: AuthConfig, dependen
     if (!user || user.disabled !== 0) return failure();
     const rawToken = token();
     const expiresAt = now + SESSION_TTL;
-    const result = await db.prepare(`INSERT INTO sessions (token_hash, user_id, csrf_token, created_at, expires_at)
-      SELECT ?, id, ?, ?, ? FROM users WHERE id = ? AND disabled = 0`)
-      .bind(await hashToken(rawToken), token(), now, expiresAt, user.id).run();
-    if (result.meta.changes !== 1) return failure();
+    const tokenHash = await hashToken(rawToken);
+    const results = await db.batch([
+      db.prepare(`INSERT INTO sessions (token_hash, user_id, csrf_token, created_at, expires_at)
+        SELECT ?, id, ?, ?, ? FROM users WHERE id = ? AND disabled = 0`)
+        .bind(tokenHash, token(), now, expiresAt, user.id),
+      db.prepare(`UPDATE users SET last_login_at = MAX(COALESCE(last_login_at, 0), ?)
+        WHERE id = ? AND disabled = 0 AND EXISTS (
+          SELECT 1 FROM sessions WHERE token_hash = ? AND user_id = users.id
+        )`).bind(now, user.id, tokenHash),
+    ]);
+    if (results[0].meta.changes !== 1) return failure();
     const previous = readCookie(request, SESSION_COOKIE);
     if (previous) await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await hashToken(previous)).run();
     return redirect(`${config.origin}/spinarium/`, [clearCookie(ATTEMPT_COOKIE), cookie(SESSION_COOKIE, rawToken, SESSION_TTL)]);
@@ -222,9 +232,10 @@ async function callback(request: Request, env: Env, config: AuthConfig, dependen
 
 export async function handleAuth(request: Request, env: Env, dependencies: AuthDependencies = {}): Promise<Response | null> {
   const path = new URL(request.url).pathname;
-  if (!['/api/auth/login', '/api/auth/signup', CALLBACK_PATH, '/api/auth/session', '/api/auth/logout'].includes(path)) return null;
+  if (!['/api/auth/login', '/api/auth/signup', '/api/auth/password-reset', CALLBACK_PATH, '/api/auth/session', '/api/auth/logout'].includes(path)) return null;
   const commonConfig = applicationConfig(env);
   assertRequestOrigin(request, commonConfig);
+  if (path === '/api/auth/password-reset') return handlePasswordReset(request, env);
   if (env.AUTH_PROVIDER === 'password') return handlePasswordAuth(request, env);
   const config = authConfig(env);
   if (request.url.length > 4096) throw new HttpError(400, 'invalid_request', 'Invalid request.');

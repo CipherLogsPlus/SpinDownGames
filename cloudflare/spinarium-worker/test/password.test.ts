@@ -53,6 +53,10 @@ test('direct password accounts use the actual local Worker, native scrypt and au
     assert.equal((await h.db.prepare('SELECT token_hash FROM sessions WHERE user_id = ?').bind(accountId).first<{ token_hash: string }>())?.token_hash,
       createHash('sha256').update(rawToken).digest('hex'));
     assert.ok(!JSON.stringify(body).includes(rawToken));
+    const activity = await h.db.prepare('SELECT created_at,last_login_at,account_revision FROM users WHERE id=?').bind(accountId)
+      .first<{ created_at: number; last_login_at: number; account_revision: number }>();
+    assert.equal(activity?.last_login_at, activity?.created_at);
+    assert.equal(activity?.account_revision, 1);
     for (const table of ['admin_allowlist', 'ownerships', 'discoveries']) {
       assert.equal((await h.db.prepare(`SELECT COUNT(*) count FROM ${table}`).first<{ count: number }>())?.count, 0);
     }
@@ -68,6 +72,8 @@ test('direct password accounts use the actual local Worker, native scrypt and au
     assert.equal((await h.fetch('/api/auth/logout', { method: 'POST', headers: { Cookie: cookie, Origin: origin, 'X-CSRF-Token': 'x'.repeat(43) } })).status, 403);
     assert.equal((await h.fetch('/api/auth/logout', { method: 'POST', headers: { Cookie: cookie, Origin: origin, 'X-CSRF-Token': current.csrfToken } })).status, 200);
     assert.equal((await h.fetch('/api/auth/session', { headers: { Cookie: cookie } })).status, 401);
+    const beforeLogin = Math.floor(Date.now() / 1000);
+    await h.db.prepare('UPDATE users SET last_login_at=?,account_revision=7 WHERE id=?').bind(beforeLogin - 600, accountId).run();
     const response = await post('/api/auth/login', { email: '  IMAGINARY+COLLECTOR@not-real.invalid  ', password });
     assert.equal(response.status, 200);
     cookie = sessionCookie(response);
@@ -76,9 +82,14 @@ test('direct password accounts use the actual local Worker, native scrypt and au
     assert.equal(body.user.displayName, 'Saved Collector');
     assert.equal(body.user.memberSince, createdAt);
     assert.equal((await h.db.prepare('SELECT COUNT(*) count FROM users').first<{ count: number }>())?.count, 1);
+    const activity = await h.db.prepare('SELECT last_login_at,account_revision FROM users WHERE id=?').bind(accountId)
+      .first<{ last_login_at: number; account_revision: number }>();
+    assert.ok(activity!.last_login_at >= beforeLogin);
+    assert.equal(activity?.account_revision, 7);
   });
 
   await t.test('wrong passwords and unknown names receive the same generic response', async () => {
+    const before = await h.db.prepare('SELECT last_login_at,account_revision FROM users WHERE id=?').bind(accountId).first();
     const wrong = await post('/api/auth/login', { email: 'imaginary+collector@not-real.invalid', password: differentPassword });
     const unknown = await post('/api/auth/login', { email: 'absent@not-real.invalid', password: differentPassword });
     assert.equal(wrong.status, 401);
@@ -86,6 +97,7 @@ test('direct password accounts use the actual local Worker, native scrypt and au
     assert.deepEqual(await wrong.json(), await unknown.json());
     assert.equal(wrong.headers.get('set-cookie'), null);
     assert.equal(unknown.headers.get('set-cookie'), null);
+    assert.deepEqual(await h.db.prepare('SELECT last_login_at,account_revision FROM users WHERE id=?').bind(accountId).first(), before);
   });
 
   await t.test('duplicate and simultaneous normalized signups cannot leave orphan users or duplicate sessions', async () => {
@@ -146,6 +158,7 @@ test('direct password accounts use the actual local Worker, native scrypt and au
     // Run this handler with the real D1 binding and Node's independent scrypt
     // worker thread. This lets the revocation complete during hashing instead
     // of queuing both requests behind a single Miniflare isolate event loop.
+    const before = await h.db.prepare('SELECT last_login_at,account_revision FROM users WHERE id=?').bind(accountId).first();
     const request = handlePasswordAuth(new Request(`${origin}/api/auth/login`, {
       method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.55' },
       body: JSON.stringify({ email: 'imaginary+collector@not-real.invalid', password }),
@@ -155,6 +168,7 @@ test('direct password accounts use the actual local Worker, native scrypt and au
     await assert.rejects(request, (error: unknown) => error instanceof HttpError && error.status === 401);
     assert.equal((await h.fetch('/api/auth/session', { headers: { Cookie: cookie } })).status, 401);
     assert.equal((await post('/api/auth/login', { email: 'imaginary+collector@not-real.invalid', password })).status, 401);
+    assert.deepEqual(await h.db.prepare('SELECT last_login_at,account_revision FROM users WHERE id=?').bind(accountId).first(), before);
   });
 
   await t.test('account and IP limits reject requests before hashing; blocked IPs cannot add account keys', async () => {
@@ -181,6 +195,7 @@ test('direct signup can be closed without disabling existing password login', as
   assert.equal(response.status, 503);
   assert.equal((await h.db.prepare('SELECT COUNT(*) count FROM password_accounts').first<{ count: number }>())?.count, 0);
   const existing = await seedSession(h.db);
+  assert.equal((await h.db.prepare('SELECT last_login_at FROM users WHERE id=?').bind(existing.id).first<{ last_login_at: number | null }>())?.last_login_at, null);
   const now = Math.floor(Date.now() / 1000);
   await h.db.prepare('UPDATE users SET oidc_issuer=?,oidc_subject=? WHERE id=?').bind('urn:spinarium:password', existing.id, existing.id).run();
   await h.db.prepare('INSERT INTO password_accounts(user_id,email_normalized,password_hash,created_at,updated_at) VALUES(?,?,?,?,?)')
@@ -188,4 +203,8 @@ test('direct signup can be closed without disabling existing password login', as
   const login = await h.fetch('/api/auth/login', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.201' }, body: JSON.stringify({ email: 'existing@invalid.test', password }) });
   assert.equal(login.status, 200);
   assert.equal((await login.json() as { user: { id: string } }).user.id, existing.id);
+  const activity = await h.db.prepare('SELECT last_login_at,account_revision FROM users WHERE id=?').bind(existing.id)
+    .first<{ last_login_at: number; account_revision: number }>();
+  assert.ok(activity!.last_login_at >= now);
+  assert.equal(activity?.account_revision, 1);
 });

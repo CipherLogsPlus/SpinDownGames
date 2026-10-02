@@ -32,7 +32,9 @@ Collectors receive their own non-draft ownership and corresponding definitions. 
 
 The latest owner instruction selects direct credentials through Cloudflare Workers, with account data saved in D1. Earlier Auth0 setup and verified-email requirements are superseded. Email-shaped identifiers may be unverified/non-deliverable and never supply authority. The Worker validates signup/login, stores a salted slow scrypt password hash and issues an opaque Secure, HttpOnly cookie. Sessions expire after eight hours; mutations require same-origin/CSRF checks. No owner setup in external provider dashboards is required. The existing Spinarium dashboard/navigation/cinematic are preserved.
 
-Trusted operators provision administrator membership only after confirming the exact saved account ID belongs to the owner. Email verification is not part of that authority. Signup input, unverified email text, a first-user shortcut, profile metadata and browser flags cannot promote a collector. Account activation requires hosted password/session verification and appropriate abuse limits; see [accounts](SPINARIUM-ACCOUNTS.md), [administration](SPINARIUM-ADMIN.md) and [migration](SPINARIUM-CLOUDFLARE.md).
+The active account-management release uses one operator-provisioned owner and regular administrators. The operator confirmed and provisioned the exact saved account designated by the owner, audited the grant and revoked its previous sessions. Email verification is not part of that authority. Only the owner can appoint or remove regular administrators. Administrators manage collectors; the owner also manages regular administrators. Current roles and active sessions are checked by the Worker and again within mutations. Self/owner destructive actions are protected. Signup input, unverified email text, a first-user shortcut, profile metadata and browser flags cannot promote a collector. See [account management](SPINARIUM-ACCOUNT-MANAGEMENT.md), [accounts](SPINARIUM-ACCOUNTS.md), [administration](SPINARIUM-ADMIN.md) and [migration](SPINARIUM-CLOUDFLARE.md).
+
+The same release adds administrator-assisted password recovery without email delivery. A private, single-use link expires after 15 minutes, stores only a digest in D1, and is invalidated by relevant access or authority changes. Successful reset revokes target sessions and the supplied browser session, consumes the credential atomically and requires a new sign-in. Automatic email recovery remains unavailable. Each of staging and production passed all 16 actual account/browser checks; the final original-site hosted suite passed all 29. See [verification](../VERIFICATION.md).
 
 ## Product and authoritative records
 
@@ -40,10 +42,10 @@ The current product is a premium engraved metal collectible plus a digital colle
 
 | Record | Required boundary |
 | --- | --- |
-| Identity / Profile / Session | Verified provider identity is separate from public profile and administrator authority. |
+| Identity / Profile / Session | Password authentication, public profile, active sessions and administrator authority are separate; an email-shaped identifier is unverified. |
 | Veiling / Artwork | Catalog content and protected assets do not imply collector ownership. |
 | Ownership | Belongs to the authenticated collector; server-issued provenance is required before future writes. |
-| Administrator / Audit | Trusted operator membership and attributable catalog operations; no public role setters. |
+| Administrator / Audit | One trusted operator-provisioned owner, owner-only regular-administrator changes and attributable account/catalog operations; no collector self-promotion. |
 | PhysicalCard / ClaimCredential | Future card binding, independent serial and one-use secure credential. |
 | Discovery / Achievement | Future server-awarded records, independent of decorative empty slots. |
 | Edition / Variant / Batch | Future normalized production rules, limits and retirement; catalog labels confer no production authority. |
@@ -62,4 +64,4 @@ Spinarium and InvoHub remain separate services. The browser never receives InvoH
 
 ## Verification
 
-Local Worker/D1 tests verify the implementation only in an isolated environment. Password credentials add `0002_password_accounts.sql`; passwords use versioned scrypt with random salts, while the email-shaped identifier is normalized and remains unverified. Password reset is unavailable for all accounts until email delivery and secure recovery exist. R2 is needed for artwork, not signup/login. Static browser checks verify the preview and preservation of the existing site. Neither proves hosted signup/login, remote D1/R2 permissions, email delivery, DNS, certificates or replacement hosting. The [migration guide](SPINARIUM-CLOUDFLARE.md) lists staging and cutover gates; [VERIFICATION.md](../VERIFICATION.md) records actual completed checks separately from pending hosted work.
+Local Worker/D1 tests verify the implementation only in an isolated environment. Password credentials add `0002_password_accounts.sql`; passwords use versioned scrypt with random salts, while the email-shaped identifier is normalized and remains unverified. The applied `0003_account_management.sql` adds the role hierarchy, indexed directory, account audit and assisted-reset digests. Automatic email recovery remains unavailable. R2 is needed for artwork, not signup/login or assisted recovery. Static browser checks verify the preview and preservation of the existing site. Neither proves hosted signup/login, remote D1/R2 permissions, email delivery, DNS, certificates or replacement hosting. The [deployment guide](SPINARIUM-CLOUDFLARE.md) lists deployment gates; [VERIFICATION.md](../VERIFICATION.md) records actual completed checks separately from pending hosted work.

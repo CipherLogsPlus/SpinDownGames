@@ -109,6 +109,11 @@ test('real signed OIDC protocol through the local Worker and D1', async (t) => {
     assert.equal(stored.token_hash, createHash('sha256').update(rawToken).digest('hex'));
     assert.notEqual(stored.token_hash, rawToken);
     assert.ok(!JSON.stringify(stored).includes('fixture-provider'));
+    const activity = await h.db.prepare('SELECT last_login_at,account_revision FROM users WHERE id=?').bind(stored.user_id)
+      .first<{ last_login_at: number; account_revision: number }>();
+    const minted = await h.db.prepare('SELECT created_at FROM sessions WHERE token_hash=?').bind(stored.token_hash).first<{ created_at: number }>();
+    assert.equal(activity?.last_login_at, minted?.created_at);
+    assert.equal(activity?.account_revision, 1);
     for (const table of ['admin_allowlist', 'ownerships', 'discoveries']) {
       const count = await h.db.prepare(`SELECT COUNT(*) count FROM ${table}`).first<{ count: number }>();
       assert.equal(count?.count, 0, `authentication grants no ${table}`);
@@ -195,11 +200,18 @@ test('real signed OIDC protocol through the local Worker and D1', async (t) => {
     assert.equal((await closed.db.prepare('SELECT COUNT(*) count FROM sessions').first<{ count: number }>())?.count, 0);
     const knownIdentity = await begin('valid', false, closed);
     const known = await seedSession(closed.db);
-    await closed.db.prepare('UPDATE users SET oidc_issuer = ?, oidc_subject = ? WHERE id = ?').bind(issuer, knownIdentity.subject, known.id).run();
+    const beforeLogin = Math.floor(Date.now() / 1000);
+    await closed.db.prepare('UPDATE users SET oidc_issuer = ?, oidc_subject = ?, display_name=?, account_revision=3, last_login_at=? WHERE id = ?')
+      .bind(issuer, knownIdentity.subject, 'Administrator Edited Name', beforeLogin - 600, known.id).run();
     const allowed = await closed.fetch(knownIdentity.path, { headers: knownIdentity.headers });
     assert.equal(allowed.headers.get('location'), `${origin}/spinarium/`);
     assert.ok(cookieValue(allowed, '__Host-spinarium_session'));
     assert.equal((await closed.db.prepare('SELECT COUNT(*) count FROM users').first<{ count: number }>())?.count, 1);
+    const activity = await closed.db.prepare('SELECT display_name,account_revision,last_login_at FROM users WHERE id=?').bind(known.id)
+      .first<{ display_name: string; account_revision: number; last_login_at: number }>();
+    assert.equal(activity?.display_name, 'Administrator Edited Name');
+    assert.equal(activity?.account_revision, 3);
+    assert.ok(activity!.last_login_at >= beforeLogin);
     const disabledIdentity = await begin('valid', false, closed);
     const disabled = await seedSession(closed.db, { disabled: true });
     await closed.db.prepare('UPDATE users SET oidc_issuer = ?, oidc_subject = ? WHERE id = ?').bind(issuer, disabledIdentity.subject, disabled.id).run();
