@@ -1,4 +1,26 @@
-# Website verification — September 26, 2026
+# Website and Spinarium verification
+
+## Cloudflare migration foundation — 2 October 2026
+
+The session inspected GitHub main at `a7e1dad` before preparing the isolated Worker backend and dormant frontend Cloudflare adapters. GitHub Pages, `CNAME`, live DNS and current artwork were preserved. No Cloudflare Spinarium resources, Auth0 application/connection, real accounts, administrator grants or ownership were created or deployed.
+
+Read-only hosted access checks confirmed that the Cloudflare plugin connector could list one account and the active `spindowngames.com` zone. D1 returned an empty database list. An unrelated contact-form Worker exists and was preserved. R2 returned error `10042`, requiring dashboard enablement. Wrangler 4.147.0 `whoami` reported “Not authenticated.” Successful connector access does not establish CLI credentials.
+
+Completed local checks reported in this session:
+
+- `scripts/verify.cjs`: all 29 original-site browser checks passed against the locally served site.
+- `scripts/verify-spinarium-domain.mjs`, `scripts/verify-spinarium-auth.mjs` and `scripts/verify-spinarium-intro.mjs` passed. The Auth test covers the retained legacy Supabase adapter only.
+- Worker types generation, TypeScript check and build passed. `npm audit --omit=dev` reported zero production dependency vulnerabilities.
+- The combined Worker suite passed all 29 tests using local D1/R2 and a test-only signed OIDC issuer. Checks cover signature/issuer/audience/nonce/expiry, browser-bound and concurrent callback replay, verified-email registration, closed-registration bypass attempts, opaque sessions, revocation/CSRF, collector/admin isolation, protected artwork, stale revisions, immutable audit and rollback. The service-boundary admin-revocation race test uses actual local D1/R2 with a test-only intercepted upload.
+- `scripts/verify-spinarium-cloudflare.mjs` passed all 16 isolated browser-adapter contract checks.
+- `scripts/verify-spinarium.cjs` passed all 47 local browser checks, including the preserved preview/cinematic/reduced-motion behavior, empty collections, disabled claims, accessibility, cookie sessions, signup/error notices, CSRF logout, server-admin denial, owned card details, stale catalog revisions and form protection during saves. Account scenarios use test-only API fixtures, not hosted Auth0 or Cloudflare.
+- Wrangler applied all 21 statements of the final D1 migration to a fresh local database and completed `deploy --dry-run`. These commands did not provision D1 or deploy a Worker remotely.
+
+Auth0 Universal Login with email/password is selected. The backend requires a fixed database connection, PKCE S256, RS256 ID-token validation, verified email and server sessions; authentication/signup remain disabled. Prepared adapters do not activate hosted accounts. Remote login/signup/verification/reset, cookies, CSRF, permissions, R2 access, replacement hosting, DNS and TLS remain unverified. A health endpoint flag, local tests and a dry run are not hosted verification. Follow [the migration runbook](docs/SPINARIUM-CLOUDFLARE.md).
+
+Earlier results below record previous website releases. They do not establish verification of the new Cloudflare backend or account activation.
+
+## Earlier website verification — September 26, 2026
 
 ## Privacy Policy and Website Terms
 

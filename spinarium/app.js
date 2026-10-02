@@ -1,6 +1,6 @@
 import { spinariumConfig } from "./config.js";
-import { createAuthClient, AuthError } from "./auth/supabase-auth.js";
-import { createSpinariumService } from "./data/supabase-service.js";
+import { createAuthClient, AuthError } from "./auth/cloudflare-auth.js";
+import { createSpinariumService } from "./data/cloudflare-service.js";
 import { createPreviewAccess } from "./data/preview-service.js";
 import { createFirstLoginIntro } from "./components/first-login-intro.js";
 import { createDashboardReveal } from "./components/dashboard-reveal.js";
@@ -46,6 +46,7 @@ const authRoutes = new Set(["signin", "signup", "reset", "update-password"]);
 let authMode = "signin";
 let adminRows = [];
 let adminSaving = false;
+let adminRevision = null;
 hydrateIcons();
 
 function feedback(message, isError = false) {
@@ -69,47 +70,36 @@ function navigationSize() {
   closeNavigation();
 }
 function setAuthMode(mode) {
-  authMode = preview ? "signin" : authRoutes.has(mode) ? mode : "signin";
-  if (authMode === "update-password" && state.session?.flow !== "recovery")
-    authMode = "signin";
+  const signupEnabled = !preview && auth.configured && spinariumConfig.signupEnabled === true;
+  authMode = signupEnabled && mode === "signup" ? "signup" : "signin";
   const signup = authMode === "signup";
-  const reset = authMode === "reset";
-  const recovery = authMode === "update-password";
-  $("#auth-title").textContent = signup
-    ? "Begin your Spinarium"
-    : reset
-      ? "Reset your password"
-      : recovery
-        ? "Choose a new password"
-        : "Enter your Spinarium";
+  $("#auth-title").textContent = signup ? "Begin your Spinarium" : "Enter your Spinarium";
   $("#auth-description").textContent = signup
-    ? "Create an account. Your collection begins empty; no Veilings are granted automatically."
-    : reset
-      ? "Request a secure password-reset link by email."
-      : recovery
-        ? "Use a new password with at least 12 characters."
-        : "Sign in to your personal collection, or create an account to begin.";
-  $("#auth-submit").textContent = signup
-    ? "Create account"
-    : reset
-      ? "Send reset link"
-      : recovery
-        ? "Save new password"
-        : "Sign in";
-  $("#auth-email").closest(".auth-field").hidden = recovery;
-  $("#auth-email").disabled = recovery;
-  $("#auth-password-group").hidden = reset;
-  $("#auth-password").disabled = reset;
-  $("#auth-password").required = !reset;
-  $("#auth-password").minLength = signup || recovery ? 12 : 1;
-  $("#auth-password").autocomplete =
-    signup || recovery ? "new-password" : "current-password";
-  $("#auth-confirm-group").hidden = !(signup || recovery);
-  $("#auth-confirm-password").disabled = !(signup || recovery);
-  $("#auth-confirm-password").required = signup || recovery;
-  $("#forgot-password").hidden = authMode !== "signin";
+    ? "Create your account using the secure account service. Verify your email before signing in. Your collection begins empty."
+    : "Continue to secure email and password sign-in. Password recovery is available there.";
+  $("#auth-submit").textContent = signup ? "Create account" : "Sign in";
+  $("#auth-email").closest(".auth-field").hidden = !preview;
+  $("#auth-email").disabled = !preview;
+  $("#auth-email").required = preview;
+  $("#auth-password-group").hidden = !preview;
+  $("#auth-password").disabled = !preview;
+  $("#auth-password").required = preview;
+  $("#auth-password").minLength = 1;
+  $("#auth-confirm-group").hidden = true;
+  $("#auth-confirm-password").disabled = true;
+  $("#auth-confirm-password").required = false;
+  $("#forgot-password").hidden = true;
+  $("#signup-tab").hidden = !signupEnabled;
+  $("#guest-tools a[href='#signup']").hidden = !signupEnabled;
+  $(".auth-tabs").hidden = !preview && !signupEnabled;
   $("#auth-fields").disabled = !auth.configured || state.authBusy;
   $("#auth-availability").hidden = auth.configured && !preview;
+  if (!preview && !auth.configured) {
+    $("#auth-availability").replaceChildren(
+      el("strong", "", "Accounts are being connected."),
+      el("p", "", auth.configurationError),
+    );
+  }
   if (preview) {
     $("#auth-title").textContent = "Spinarium login";
     $("#auth-description").textContent = "Explore an empty collection preview. Real accounts are not connected yet.";
@@ -120,23 +110,23 @@ function setAuthMode(mode) {
     $("#auth-email").type = "text";
     $("label[for='auth-email']").textContent = "Username";
     $("#auth-submit").textContent = "Log in";
-    $("#signup-tab").hidden = true;
-    $("#forgot-password").hidden = true;
-    $("#guest-tools a[href='#signup']").hidden = true;
+  } else {
+    $(".auth-policy").replaceChildren(
+      document.createTextNode("By signing in, you agree to the "),
+      Object.assign(el("a", "", "Terms"), { href: "../terms.html" }),
+      document.createTextNode(" and acknowledge the "),
+      Object.assign(el("a", "", "Privacy Policy"), { href: "../privacy.html" }),
+      document.createTextNode("."),
+    );
   }
   for (const [selector, active] of [
-    ["#signin-tab", authMode === "signin"],
+    ["#signin-tab", !signup],
     ["#signup-tab", signup],
   ]) {
     if (active) $(selector).setAttribute("aria-current", "page");
     else $(selector).removeAttribute("aria-current");
   }
-  document.title =
-    (signup
-      ? "Create account"
-      : reset || recovery
-        ? "Reset password"
-        : "Sign in") + " · Spinarium — SpinDownGames™";
+  document.title = (signup ? "Create account" : "Sign in") + " · Spinarium — SpinDownGames™";
   clearPasswords();
 }
 function clearPrivateViews() {
@@ -149,6 +139,7 @@ function clearPrivateViews() {
   $("#catalog-search").value = "";
   $("#collection-sort").value = "number";
   adminRows = [];
+  adminRevision = null;
   $("#admin-form").reset();
   $("#admin-list").replaceChildren();
   for (const id of [
@@ -293,7 +284,7 @@ async function handleSession(session) {
   $("#sidebar-nav").hidden = false;
   $("#collection-notice").hidden = false;
   $("#claim-open").hidden = false;
-  $("#profile-name").textContent = session.user.email;
+  $("#profile-name").textContent = session.user.displayName || session.user.email;
   if (preview) $("#collection-notice").textContent = "Static preview · No real account, ownership, or backend actions are connected.";
   navigationSize();
   if (authRoutes.has(location.hash.slice(1)) || !location.hash)
@@ -390,36 +381,15 @@ $("#claim-open").addEventListener("click", (event) => {
 $("#auth-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!auth.configured || state.authBusy) return;
-  const email = $("#auth-email").value;
-  const password = $("#auth-password").value;
-  if (
-    (authMode === "signup" || authMode === "update-password") &&
-    password !== $("#auth-confirm-password").value
-  ) {
-    feedback("The passwords do not match.", true);
-    return;
-  }
-  const mode = authMode;
   state.authBusy = true;
   $("#auth-fields").disabled = true;
   feedback("Please wait…");
   try {
-    if (mode === "signup") {
-      const result = await auth.signUp({ email, password });
-      feedback(
-        result.confirmationRequired
-          ? "Check your email for a confirmation link before signing in."
-          : "Your account is ready.",
-      );
-    } else if (mode === "reset") {
-      await auth.requestPasswordReset({ email });
-      feedback(
-        "If an account matches that email, a password-reset link will be sent.",
-      );
-    } else if (mode === "update-password") {
-      await auth.updatePassword({ password });
-      feedback("Your password has been updated. Please sign in.");
-    } else await auth.signIn({ email, password });
+    if (preview) await auth.signIn({
+      email: $("#auth-email").value, password: $("#auth-password").value,
+    });
+    else if (authMode === "signup") await auth.signUp();
+    else await auth.signIn();
   } catch (error) {
     feedback(
       preview
@@ -514,6 +484,7 @@ function renderAdminList(rows) {
   for (const row of rows) {
     const button = el("button", "admin-catalog-item");
     button.type = "button";
+    button.disabled = adminSaving;
     if (row.artworkUrl) {
       const thumbnail = el("img", "admin-artwork-thumbnail");
       thumbnail.src = row.artworkUrl;
@@ -528,7 +499,9 @@ function renderAdminList(rows) {
       el("span", "", row.status + " · " + (row.edition || "No edition")),
     );
     button.addEventListener("click", () => {
+      if (adminSaving) return;
       $("#admin-id").value = row.id;
+      adminRevision = row.revision ?? null;
       $("#admin-name").value = row.name;
       $("#admin-description").value = row.description;
       $("#admin-number").value = row.character_number ?? "";
@@ -559,11 +532,19 @@ async function loadAdmin() {
   }
 }
 $("#admin-new").addEventListener("click", () => {
+  if (adminSaving) return;
   $("#admin-form").reset();
   $("#admin-id").value = "";
+  adminRevision = null;
   $("#admin-feedback").textContent = "";
   $("#admin-name").focus();
 });
+function setAdminBusy(busy) {
+  adminSaving = busy;
+  for (const control of $("#admin-form").querySelectorAll("input, textarea, select, button"))
+    control.disabled = busy;
+  for (const button of $("#admin-list").querySelectorAll("button")) button.disabled = busy;
+}
 $("#admin-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!state.admin || adminSaving) return;
@@ -578,13 +559,13 @@ $("#admin-form").addEventListener("submit", async (event) => {
       "Choose a PNG, JPEG, or WebP image no larger than 8 MB.";
     return;
   }
-  adminSaving = true;
-  $("#admin-save").disabled = true;
+  setAdminBusy(true);
   $("#admin-feedback").textContent = "Saving…";
   let saved = null;
   try {
     const input = {
       id: $("#admin-id").value || undefined,
+      revision: adminRevision,
       name: $("#admin-name").value,
       description: $("#admin-description").value,
       number: $("#admin-number").value
@@ -597,20 +578,31 @@ $("#admin-form").addEventListener("submit", async (event) => {
     saved = await service.saveVeiling(input);
     if (epoch !== state.epoch) return;
     $("#admin-id").value = saved.id;
-    if (file) await service.uploadArtwork({ veilingId: saved.id, file });
+    adminRevision = saved.revision;
+    if (file) {
+      const uploaded = await service.uploadArtwork({ veilingId: saved.id, file, revision: saved.revision });
+      if (epoch !== state.epoch) return;
+      adminRevision = uploaded.revision;
+    }
     if (epoch !== state.epoch) return;
     $("#admin-feedback").textContent =
       "Veiling saved. No collector ownership has been changed.";
     $("#admin-artwork").value = "";
     await loadAdmin();
-  } catch {
-    if (epoch === state.epoch)
-      $("#admin-feedback").textContent = saved
+  } catch (error) {
+    if (epoch === state.epoch) {
+      const stale = error?.code === "STALE_REVISION" || error?.code === "REVISION_REQUIRED";
+      $("#admin-feedback").textContent = stale
+        ? "This Veiling changed or needs to be reloaded. Select its current catalog entry before saving again."
+        : error?.code === "NUMBER_IN_USE"
+        ? "This character number is already in use. Choose another number."
+        : saved
         ? "The description was saved, but artwork could not be attached. Please retry the upload."
         : "The Veiling could not be saved. No changes have been confirmed.";
+      if (stale) await loadAdmin();
+    }
   } finally {
-    adminSaving = false;
-    $("#admin-save").disabled = false;
+    setAdminBusy(false);
   }
 });
 auth.onAuthStateChange(handleSession);

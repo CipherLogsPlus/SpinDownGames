@@ -29,7 +29,9 @@ Open <http://localhost:8000>. No install, build, account, database, third-party 
 - `assets/coin.glb` and `assets/coin-poster.webp`: existing coin geometry and still preview.
 - `assets/fonts/`: Anton and DM Sans, distributed with their SIL Open Font Licenses.
 - `scripts/verify.cjs`: browser checks for interactions, responsive layout, accessibility, and fallbacks.
-- `spinarium/`: separate cinematic account-gated collection area at `/spinarium/`, with reusable native modules, plain black empty slots, Supabase account/catalog adapters, and an unavailable physical-card registration flow. Account configuration remains disabled until a dedicated backend is installed and verified. The homepage's **View Spinarium** button is its entry point.
+- `spinarium/`: separate cinematic collection area at `/spinarium/`, with reusable native modules, an explicit empty frontend preview (`admin` / `1234`), plain black slots, and disabled physical-card registration. Preview access is not real authentication or administrator authority. The homepage's **View Spinarium** button is its entry point.
+- `cloudflare/spinarium-worker/`: isolated Worker backend foundation with D1-native migrations, OIDC/server sessions, protected collector/admin APIs, and private R2 artwork. Auth0 email/password login/signup is prepared but disabled; no Spinarium Cloudflare resources have been created or deployed.
+- `docs/SPINARIUM-CLOUDFLARE.md`: the selected Cloudflare platform, actually verified connector/CLI access, and incremental staging/hosting migration gates. Retained Supabase adapters/schema and historical setup documents are superseded unused groundwork.
 - `docs/SPINARIUM-ARCHITECTURE.md`: Spinarium service boundary, domain relationships, and requirements for future authenticated ownership and secure claiming.
 - `assets/spinarium/`: replaceable original concept artwork with provenance; these images and the sample lore are not finalized canon.
 - `scripts/verify-spinarium-domain.mjs` and `scripts/verify-spinarium.cjs`: Spinarium domain/browser checks and original-site preservation checks. See `spinarium/README.md` for setup.
@@ -56,6 +58,8 @@ The September 19, 2026 Hydro Car, Card & Vendor Show is retained as a **past eve
 
 GitHub Pages publishes `main` from the repository root. Pushing to that branch deploys the site; verify the matching Pages build and public assets before calling a release live. This repository is separate from InvoHub and has no connection to private inventory or authentication.
 
+Cloudflare Workers, D1 and R2 are the selected replacement infrastructure. Keep the existing Pages configuration, `CNAME` and live DNS until the complete replacement site and backend have passed hosted staging checks. The isolated backend package does not deploy through a Pages push. Real accounts, claims and administrator access remain inactive; the current preview creates no ownership.
+
 ### Custom domain
 
 `CNAME` sets the GitHub Pages domain to `spindowngames.com`. Keep this file in future deployments. Canonical URLs and share metadata use `https://spindowngames.com/`; page, stylesheet, script, and asset links remain relative so they work at the domain root.
@@ -70,7 +74,7 @@ Cloudflare manages DNS. Configure these records with **DNS only** (gray cloud) a
 | A | @ | 185.199.111.153 |
 | CNAME | www | cipherlogsplus.github.io |
 
-For the initial switch, add the domain to GitHub Pages before pointing these DNS records at GitHub. Verify domain ownership through the GitHub account's Pages settings and keep its verification TXT record in Cloudflare. Once DNS is correct and GitHub has issued the certificate, enable Enforce HTTPS and check the apex, `www` redirect, old GitHub Pages URL, and all three site pages. Do not call the domain live until those checks pass. See [GitHub's custom-domain instructions](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site).
+These are the existing GitHub Pages deployment instructions, not a request to change live DNS during Cloudflare preparation. For initial Pages setup, add the domain to GitHub Pages before pointing these records at GitHub. Verify domain ownership through the GitHub account's Pages settings and keep its verification TXT record in Cloudflare. Once DNS is correct and GitHub has issued the certificate, enable Enforce HTTPS and check the apex, `www` redirect, old GitHub Pages URL, and all site pages. See [GitHub's custom-domain instructions](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site). Follow [the Cloudflare migration guide](docs/SPINARIUM-CLOUDFLARE.md) before replacing this working deployment.
 
 ## Website policies
 
