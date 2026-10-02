@@ -2,7 +2,7 @@
 
 ## Cloudflare migration foundation — 2 October 2026
 
-The session inspected GitHub main at `a7e1dad` before preparing the isolated Worker backend and dormant frontend Cloudflare adapters. GitHub Pages, `CNAME`, live DNS and current artwork were preserved. No Cloudflare Spinarium resources, Auth0 application/connection, real accounts, administrator grants or ownership were created or deployed.
+The session inspected GitHub main at `a7e1dad` before preparing the isolated Worker backend and dormant frontend Cloudflare adapters. GitHub Pages, `CNAME`, live DNS and current artwork were preserved. At the end of the local foundation milestone, no Cloudflare Spinarium resources, Auth0 application/connection, real accounts, administrator grants or ownership had been created or deployed. The subsequent hosted staging deployment is recorded separately below.
 
 Read-only hosted access checks confirmed that the Cloudflare plugin connector could list one account and the active `spindowngames.com` zone. D1 returned an empty database list. An unrelated contact-form Worker exists and was preserved. R2 returned error `10042`, requiring dashboard enablement. Wrangler 4.147.0 `whoami` reported “Not authenticated.” Successful connector access does not establish CLI credentials.
 
@@ -17,6 +17,20 @@ Completed local checks reported in this session:
 - Wrangler applied all 21 statements of the final D1 migration to a fresh local database and completed `deploy --dry-run`. These commands did not provision D1 or deploy a Worker remotely.
 
 Auth0 Universal Login with email/password is selected. The backend requires a fixed database connection, PKCE S256, RS256 ID-token validation, verified email and server sessions; authentication/signup remain disabled. Prepared adapters do not activate hosted accounts. Remote login/signup/verification/reset, cookies, CSRF, permissions, R2 access, replacement hosting, DNS and TLS remain unverified. A health endpoint flag, local tests and a dry run are not hosted verification. Follow [the migration runbook](docs/SPINARIUM-CLOUDFLARE.md).
+
+## Hosted staging deployment — 2 October 2026
+
+After the owner explicitly requested making Spinarium live, authenticated Cloudflare connector writes provisioned staging infrastructure without changing production hosting or DNS:
+
+- Created D1 `spinarium-staging`, ID `1cfc3d12-1047-4cb7-8448-a30aff02d3d0`, and applied `0001_foundation.sql` remotely. Remote inspection verified 10 application tables, two immutable-audit triggers and zero users, ownerships and administrators. The Wrangler `d1_migrations` ledger records the applied migration.
+- Deployed Worker `spinarium-staging` from the tested `695b65a` bundle in [draft PR #3](https://github.com/CipherLogsPlus/SpinDownGames/pull/3), enabled its workers.dev hostname, and verified `https://spinarium-staging.cipherlogsplus.workers.dev/api/health` returned HTTP 200 through curl. Its response reports accounts disabled and claims disabled. Protected authentication routes returned 503 with accounts disabled. Remote settings confirm authentication/signup disabled, no client-secret or R2 binding, query redaction enabled and automatic invocation logs disabled. A Python user-agent request received Cloudflare error 1010; the successful curl probe is not a browser test.
+- Deployed the staging static site through Cloudflare's direct asset upload API with 43 public assets; `_headers` is applied through asset metadata. Generated staging config has `previewEnabled: false`, `apiBase: ""`, `signupEnabled: false`. Production GitHub Pages, `CNAME`, DNS and artwork remain preserved.
+- The original website's 29 browser checks passed against the hosted staging origin. The environment's session proxy was also supplied to Playwright's Node request path for fallback tests; no repository runner change was required.
+- All 29 direct hosted Spinarium smoke checks passed without API fixtures: disabled account entry, actual health/protected API responses, private source/config probes returning 404, current artwork/fonts/styles, mobile/desktop accessibility, layouts at 100%/200% text, and noindex headers. These checks did not perform an Auth0 login.
+- Follow-up local verification passed all 49 Spinarium browser checks, including real-mode first-entry/reentry/reduced-motion cinematic behavior with test-only account fixtures, and all 16 adapter contracts after correcting duplicate-number error parsing. Staging packaging and its deployment dry run passed. Privacy/terms updates passed local accessibility and mobile checks and were uploaded to staging.
+- R2 still returns error `10042`; no artwork bucket exists. Auth0 application/connection/secret remain unconfigured, and no real accounts or owner allowlist membership exist. Authentication/signup/claims remain disabled. Auth0 also requires a supported external production email sender before public verification/reset activation.
+
+These are actual remote D1, static-hosting and disabled-Worker checks, distinct from the local test results above. They do not verify hosted OIDC signup/login/verification/reset, authenticated sessions/CSRF, administrator/collector isolation, private R2 artwork or production cutover. The [activation handoff](docs/SPINARIUM-ACTIVATION.md) and [migration guide](docs/SPINARIUM-CLOUDFLARE.md#auth0-emailpassword-setup) provide the exact staging URLs and direct dashboard secret setup; secrets must never enter chat.
 
 Earlier results below record previous website releases. They do not establish verification of the new Cloudflare backend or account activation.
 

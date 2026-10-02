@@ -9,7 +9,9 @@
     "build": "esbuild src/index.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/index.js",
     "test": "npm run build && node --import tsx --test test/*.test.ts",
     "db:migrate:local": "wrangler d1 migrations apply spinarium-local --local",
-    "dry-run": "wrangler deploy --dry-run"
+    "dry-run": "wrangler deploy --dry-run",
+    "prepare:staging": "node scripts/prepare-staging-assets.mjs",
+    "dry-run:staging": "npm run prepare:staging && wrangler deploy --config wrangler.staging.jsonc --dry-run"
   },
   "dependencies": {
     "oauth4webapi": "3.8.8"

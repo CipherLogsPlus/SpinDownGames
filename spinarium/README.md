@@ -1,10 +1,10 @@
 # Spinarium
 
-Spinarium lives at `/spinarium/` inside the static SpinDownGames™ website. The homepage's **View Spinarium** button opens it. The site still deploys through GitHub Pages; Cloudflare migration is being prepared in an isolated backend directory, with no live hosting switch or account activation.
+Spinarium lives at `/spinarium/` inside the static SpinDownGames™ website. The homepage's **View Spinarium** button opens it. The site still deploys through GitHub Pages; A Cloudflare staging Worker/static site and D1 database are deployed at <https://spinarium-staging.cipherlogsplus.workers.dev/spinarium/>. Production hosting/DNS remain unchanged, and real account activation is disabled.
 
 ## Current static preview
 
-The minimal “Spinarium login” accepts the owner-requested temporary username `admin` and password `1234`. `config.js` explicitly selects `previewEnabled: true`. This is a public frontend preview with no verified identity, administrator authority, backend requests, ownership or claim capability. Sign-out and reload clear its in-memory preview session. Signup/recovery remain unavailable.
+The minimal “Spinarium login” accepts the owner-requested temporary username `admin` and password `1234`. The repository/production `config.js` explicitly selects `previewEnabled: true`. The separately generated staging config selects `previewEnabled: false`, with empty `apiBase` and disabled signup, so staging account entry remains unavailable. This is a public frontend preview with no verified identity, administrator authority, backend requests, ownership or claim capability. Sign-out and reload clear its in-memory preview session. Signup/recovery remain unavailable.
 
 Home has two choices: My Collection and Explore Veilings. Collection grid, filters, statistics and selected details live on separate collection/explore routes. Revealed, Uncollected and Upcoming sit inside Explore; secondary destinations sit behind Menu on every screen size. Details open only after selecting a card. Collections remain empty, black slots contain no hidden artwork or invented characters, and Upcoming has an honest empty state. Registration input and submission remain disabled.
 
@@ -20,7 +20,7 @@ The intended production boundary is same-origin `/api/`. D1 uses its own SQLite 
 
 `auth/supabase-auth.js`, `data/supabase-service.js` and `../supabase/spinarium-schema.sql` are retained unused historical groundwork. Earlier Supabase setup is superseded; do not configure a Supabase project for Spinarium. `data/demo-service.js` remains an isolated historical fixture and is never imported by the public application.
 
-See [migration](../docs/SPINARIUM-CLOUDFLARE.md), [accounts](../docs/SPINARIUM-ACCOUNTS.md), [administration](../docs/SPINARIUM-ADMIN.md), [architecture](../docs/SPINARIUM-ARCHITECTURE.md) and [handoff](../docs/SPINARIUM-HANDOFF.md).
+See [activation](../docs/SPINARIUM-ACTIVATION.md), [migration](../docs/SPINARIUM-CLOUDFLARE.md), [accounts](../docs/SPINARIUM-ACCOUNTS.md), [administration](../docs/SPINARIUM-ADMIN.md), [architecture](../docs/SPINARIUM-ARCHITECTURE.md) and [handoff](../docs/SPINARIUM-HANDOFF.md).
 
 ## Run and verify locally
 

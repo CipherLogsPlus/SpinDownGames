@@ -39,6 +39,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run dry-run
+      - run: npm run dry-run:staging
       - name: Browser adapter and collection contracts
         run: |
           node ../../scripts/verify-spinarium-cloudflare.mjs

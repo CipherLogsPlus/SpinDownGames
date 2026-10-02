@@ -1,14 +1,14 @@
 # Spinarium architecture
 
-Cloudflare is the selected platform: Workers enforce authentication and permissions, D1 stores authoritative application records, and R2 stores protected artwork. The existing static HTML/CSS/native-module site still runs on GitHub Pages. Migration must preserve that working deployment until replacement hosting has been verified. No Cloudflare Spinarium resource has been created or deployed.
+Cloudflare is the selected platform: Workers enforce authentication and permissions, D1 stores authoritative application records, and R2 stores protected artwork. The existing static HTML/CSS/native-module site still runs on GitHub Pages. Migration must preserve that working deployment until replacement hosting has been verified. A dedicated staging Worker, static site and D1 database are now deployed; hosted browser/account verification remains pending. R2 and Auth0 are unconfigured, and production hosting/DNS remain unchanged. See [activation](SPINARIUM-ACTIVATION.md).
 
 The former Supabase architecture is preserved in [the historical document](history/SPINARIUM-ARCHITECTURE-SUPABASE-2026-10-01.md). Its provisioning and activation instructions are superseded; retained Supabase adapters and SQL are unused groundwork.
 
 ## Current presentation
 
-`/spinarium/` opens the minimal “Spinarium login” screen. `admin` / `1234` is an explicit frontend preview, with no verified identity or administrative authority. The dashboard contains My Collection and Explore Veilings; other sections sit behind Menu. Collections start empty, decorative slots are black, and details open only after a card selection. Registration remains disabled. Catalog creation must never create ownership.
+On the production/repository preview, `/spinarium/` opens the minimal “Spinarium login” screen. `admin` / `1234` is an explicit frontend preview, with no verified identity or administrative authority. The dashboard contains My Collection and Explore Veilings; other sections sit behind Menu. Collections start empty, decorative slots are black, and details open only after a card selection. Registration remains disabled. Catalog creation must never create ownership.
 
-The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Real account onboarding state is not implemented. Keep current artwork until the owner supplies a replacement draft. The planned space scene with a large purple Veil and no cube does not authorize an artwork change now.
+The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Real account onboarding state is not implemented. The generated staging config disables preview/API access/signup until account setup is verified. Keep current artwork until the owner supplies a replacement draft. The planned space scene with a large purple Veil and no cube does not authorize an artwork change now.
 
 ## Code and service boundaries
 

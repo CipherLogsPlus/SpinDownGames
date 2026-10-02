@@ -110,7 +110,7 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
     if (!response.ok) {
       if (response.status === 409) {
         let errorCode;
-        try { errorCode = (await response.json())?.error?.code; } catch { /* Only known codes are read. */ }
+        try { errorCode = (await response.json())?.code; } catch { /* Only known codes are read. */ }
         assertIdentity(identity);
         if (errorCode === "NUMBER_IN_USE") throw new SpinariumServiceError("NUMBER_IN_USE");
       }

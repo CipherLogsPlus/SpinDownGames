@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="How the SpinDownGames™ website handles information, hosting logs, and links to community platforms."
+      content="How SpinDownGames™ handles website information, the Spinarium preview, planned secure accounts, and connected services."
     />
     <meta name="theme-color" content="#0a0c10" />
     <link rel="canonical" href="https://spindowngames.com/privacy.html" />
@@ -29,26 +29,59 @@
       <h1>Privacy Policy</h1>
       <p class="legal-date">
         Effective and last updated:
-        <time datetime="2026-09-26">September 26, 2026</time>
+        <time datetime="2026-10-02">October 2, 2026</time>
       </p>
       <p class="legal-intro">
         This policy explains information handling for the public SpinDownGames™
-        website and the contact links it provides.
+        website, Spinarium, and the contact links it provides. Secure Spinarium
+        accounts are being prepared; the public experience currently remains a
+        temporary preview.
       </p>
 
       <section aria-labelledby="site-information">
         <h2 id="site-information">What the website collects</h2>
         <p>
           The website provides card, community, and event information. It
-          currently has no customer accounts, checkout, contact forms, or
-          mailing-list signup. There is no visitor account database maintained
-          by this website.
+          currently has no checkout, contact forms, or mailing-list signup.
+          Spinarium’s temporary preview login does not create a real account,
+          establish administrator access, or grant collectible ownership.
         </p>
         <p>
           The dice roller keeps its recent rolls in the open page’s memory. That
           history resets when the page reloads and is not sent to us or saved in
           browser storage. Fonts, card images, event flyers, and the coin model
           are served with the website.
+        </p>
+      </section>
+
+      <section aria-labelledby="spinarium-accounts">
+        <h2 id="spinarium-accounts">Spinarium accounts being prepared</h2>
+        <p>
+          Account registration and secure sign-in are not yet active on the
+          public preview. The prepared account service uses Auth0 to handle
+          email and password entry, email verification, and password recovery.
+          When enabled, those details are processed by Auth0 under
+          <a href="https://www.okta.com/privacy-policy/">Okta’s Privacy Policy</a>.
+          Spinarium’s account service does not receive or store your password.
+        </p>
+        <p>
+          The prepared Spinarium service checks your verified email and identity
+          before granting a session. It stores an application account ID, the
+          identity provider’s account identifier, display name, account dates,
+          account status, and server session records in Cloudflare D1. Email is
+          checked during sign-in. The application database has no separate email
+          field, but the identity provider’s display name may contain an email
+          address.
+          Collection records link to your application account; trusted
+          administrators’ catalog changes are recorded for accountability.
+        </p>
+        <p>
+          Session records and temporary sign-in attempts support authentication
+          and security. Request identifiers are also used to limit repeated
+          sign-in requests. Session expiry limits access; it does not promise
+          immediate deletion of stored records. To ask about account information
+          or request its correction or deletion, use the private contact
+          options below.
         </p>
       </section>
 
@@ -73,15 +106,38 @@
           >
           for its processing practices and privacy options.
         </p>
+        <p>
+          Cloudflare manages the domain’s DNS. Cloudflare Workers, D1, and R2
+          are being prepared for Spinarium’s account and collection services
+          and artwork. When those services are enabled, Cloudflare processes
+          requests and stores the application records and artwork needed to
+          provide them. See
+          <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare’s Privacy Policy</a>
+          for its own information practices.
+        </p>
       </section>
 
       <section aria-labelledby="tracking">
-        <h2 id="tracking">Cookies and tracking</h2>
+        <h2 id="tracking">Cookies, browser storage, and tracking</h2>
         <p>
-          We have not added analytics, advertising pixels, tracking cookies, or
-          persistent browser storage to this website. Its code does not track
-          you across other websites or change its behavior in response to a
-          browser’s Do Not Track signal.
+          We have not added analytics, advertising pixels, or advertising
+          tracking cookies. Spinarium saves whether its preview welcome
+          introduction has finished in this browser’s local storage, so later
+          visits can bypass it. Clearing that site storage resets the
+          introduction. Preview login state stays in the open page’s memory
+          and resets on reload; it is not a real account session.
+        </p>
+        <p>
+          When secure accounts are enabled, the prepared service uses an
+          essential session cookie that expires after eight hours and a
+          temporary sign-in cookie that expires after ten minutes. These cookies
+          are sent over HTTPS and cannot be read by page scripts. Signing out
+          revokes the Spinarium session; an Auth0 session may remain. Browser
+          cookie controls can prevent secure sign-in from working.
+        </p>
+        <p>
+          The website’s code does not track you across other websites or change
+          its behavior in response to a browser’s Do Not Track signal.
         </p>
         <p>
           This describes the website’s own features. Hosting and the external
@@ -124,13 +180,16 @@
       <section aria-labelledby="choices">
         <h2 id="choices">Your choices and privacy requests</h2>
         <p>
-          You can browse the website without creating an account or joining a
-          community. Use the relevant platform’s controls to manage information
-          you share there. GitHub, Discord, and Instagram control their own
-          systems and retention settings.
+          You can browse the public website without creating an account or
+          joining a community. When enabled, personal Spinarium collection
+          access requires secure sign-in. Use your browser’s controls to clear
+          local site storage, and the relevant provider’s controls to manage
+          information you share there. GitHub, Cloudflare, Auth0, Discord, and
+          Instagram operate their own systems and information practices.
         </p>
         <p>
-          To ask about information you have sent to the SpinDownGames™ team, or
+          To ask about Spinarium account information or information you have
+          sent to the SpinDownGames™ team, or
           to request access, correction, or deletion, contact us through the
           links below. We may need to verify that a request relates to you. The
           rights and exceptions that apply depend on applicable law; requests
@@ -142,10 +201,10 @@
       <section aria-labelledby="children">
         <h2 id="children">Children’s information</h2>
         <p>
-          The website does not offer forms or accounts to collect children’s
-          personal information. If a parent or guardian believes a child has
-          shared personal information with our team, please contact us. Separate
-          platforms have their own age requirements and privacy rules.
+          If a parent or guardian believes a child has shared personal
+          information with our team or used an enabled account service, please
+          contact us through the private options below. Separate platforms have
+          their own age requirements and privacy rules.
         </p>
       </section>
 

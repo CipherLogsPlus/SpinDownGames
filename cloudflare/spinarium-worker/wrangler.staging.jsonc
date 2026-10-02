@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spinarium-staging",
+  "account_id": "3c470b1087f06866d9c36d5f588fcbca",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": ["nodejs_compat"],
+  // Independent staging URL; no production domain or GitHub Pages route changes.
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./.staging-assets",
+    "run_worker_first": ["/api/*"],
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "vars": {
+    "AUTH_ENABLED": "false",
+    "SIGNUP_ENABLED": "false",
+    "APP_ORIGIN": "https://spinarium-staging.cipherlogsplus.workers.dev",
+    "OIDC_ISSUER": "",
+    "OIDC_CLIENT_ID": "",
+    "AUTH0_CONNECTION": ""
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "spinarium-staging",
+    "database_id": "1cfc3d12-1047-4cb7-8448-a30aff02d3d0",
+    "migrations_dir": "migrations"
+  }],
+  // R2 is not enabled on the account yet, so ARTWORK is intentionally unbound.
+  // Artwork uploads are unavailable until an isolated staging bucket is added.
+  // Before enabling authentication, configure Auth0's issuer, client ID,
+  // database connection and OIDC_CLIENT_SECRET through a secure secret channel.
+  // Then rebuild public assets with --accounts-enabled (and --signup-enabled
+  // only when registration is ready), and change the matching backend flags.
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": false }
+  }
+}

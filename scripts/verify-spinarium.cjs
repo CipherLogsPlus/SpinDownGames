@@ -94,9 +94,13 @@ function assertNoSecretsInURLs(requests) {
 async function storage(page) {
   return page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie }));
 }
-async function assertNoBrowserCredentials(page, { preview = false } = {}) {
+async function assertNoBrowserCredentials(page) {
   const actual = await storage(page);
-  if (preview) delete actual.local[introKey];
+  // This browser-local presentation preference never represents identity or authority.
+  if (actual.local[introKey] !== undefined) {
+    assert.equal(actual.local[introKey], "seen");
+    delete actual.local[introKey];
+  }
   assert.deepEqual(actual, { local: {}, session: {}, cookie: "" });
 }
 async function checkAxe(page) {
@@ -110,8 +114,13 @@ async function checkOverflow(page, width, scale) {
   const size = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
   assert(size.document <= size.viewport + 1, JSON.stringify(size));
 }
-async function createFixture(browser, { scenario = "empty", signedIn = false, signupEnabled = false, apiBase = "/api" } = {}) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+async function createFixture(browser, { scenario = "empty", signedIn = false, signupEnabled = false, apiBase = "/api", reducedMotion = "reduce", mockSpeech = false } = {}) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion });
+  if (mockSpeech) await context.addInitScript(() => {
+    window.__spoken = [];
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: { cancel() {}, speak(line) { window.__spoken.push(line.text); setTimeout(() => line.onend?.(), 20); } } });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: class { constructor(text) { this.text = text; } } });
+  });
   const calls = [];
   const state = { signedIn, admin: scenario === "admin", expireDashboard: false, adminRows: [], nextConflict: false, holdSave: false, releaseSave: null };
   if (signedIn) await context.addCookies([{ name: "spinarium_session", value: fixtureCookie, url: base, httpOnly: true, sameSite: "Lax" }]);
@@ -185,8 +194,10 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
   await page.waitForFunction(() => !document.body.classList.contains("static-preview") &&
     document.querySelector("#auth-email")?.disabled &&
     document.querySelector("#auth-password")?.disabled);
-  if (signedIn && !["unavailable", "malformed"].includes(scenario))
+  if (signedIn && !["unavailable", "malformed"].includes(scenario)) {
     await page.waitForSelector("#hub-view:not([hidden])");
+    await page.waitForFunction(() => !document.querySelector("#first-login-intro").open);
+  }
   if (["unavailable", "malformed"].includes(scenario))
     await page.waitForFunction(() => document.querySelector("#auth-feedback")?.textContent.trim());
   await page.evaluate(() => document.fonts.ready);
@@ -212,12 +223,13 @@ async function assertEmptyCollection(page, memberSince) {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.BROWSER_PATH || undefined, args: ["--no-sandbox", "--enable-unsafe-swiftshader"] });
   const contexts = [];
   try {
-    await test("live website, artwork, legal pages, and GitHub Pages configuration remain unchanged from main", async () => {
+    await test("homepage, artwork, shared styles, and GitHub Pages configuration remain unchanged from main", async () => {
       // The migration intentionally changes Spinarium adapters, verification,
-      // and migration docs. The currently published site stays byte-for-byte.
+      // and migration docs. Account/storage disclosure updates are also expected;
+      // homepage, artwork, shared styles, and current hosting remain byte-for-byte.
       for (const file of git("ls-tree", "-r", "--name-only", preservationRef).toString().trim().split("\n")) {
         assert(fs.existsSync(path.join(root, file)), `Original file removed: ${file}`);
-        if (file.startsWith("spinarium/") || file.startsWith("docs/") || file.startsWith("scripts/verify-spinarium") || [".gitignore", "README.md", "VERIFICATION.md"].includes(file)) continue;
+        if (file.startsWith("spinarium/") || file.startsWith("docs/") || file.startsWith("scripts/verify-spinarium") || [".gitignore", "README.md", "VERIFICATION.md", "privacy.html", "terms.html"].includes(file)) continue;
         assert(fs.readFileSync(path.join(root, file)).equals(git("show", `${preservationRef}:${file}`)), `Original file changed: ${file}`);
       }
     });
@@ -283,7 +295,7 @@ async function assertEmptyCollection(page, memberSince) {
       await assertEmptyCollection(preview, "—");
       assert(await preview.locator("#admin-nav").isHidden());
       assert.doesNotMatch(await preview.locator("body").innerText(), /Ashenling|Duskspore|Lumenkit|Crysthale|Embercoil|Zephyryn|Demo collector|Sample ownership/i);
-      await assertNoBrowserCredentials(preview, { preview: true });
+      await assertNoBrowserCredentials(preview);
       assertNoDemoRequests(observedPreview.requests);
     });
     await test("empty preview search, filters, and sorting do not invent records", async () => {
@@ -344,7 +356,7 @@ async function assertEmptyCollection(page, memberSince) {
       assert(!(await preview.locator("#first-login-intro").evaluate((node) => node.open)));
       await preview.reload({ waitUntil: "networkidle" });
       assert(await preview.locator("#auth-view").isVisible());
-      await assertNoBrowserCredentials(preview, { preview: true });
+      await assertNoBrowserCredentials(preview);
     });
     await test("normal-motion introduction unfurls, voices the welcome, docks, and completes without Skip", async () => {
       const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "no-preference" });
@@ -435,6 +447,53 @@ async function assertEmptyCollection(page, memberSince) {
       await assertNoBrowserCredentials(page);
       assertNoDemoRequests(observed.requests);
       assertNoSecretsInURLs(observed.requests);
+    });
+    await test("real account first entry keeps reduced-motion onboarding, and later entries remember only the browser preference", async () => {
+      const fixture = await createFixture(browser); contexts.push(fixture.context);
+      await fixture.page.locator("#auth-submit").click();
+      await fixture.page.waitForSelector("#first-login-intro[open]");
+      assert.equal(await fixture.page.locator("#first-login-intro").getAttribute("data-reduced"), "true");
+      assert.equal(await fixture.page.locator('#first-login-intro button').filter({ hasText: /skip/i }).count(), 0);
+      await fixture.page.waitForFunction(() => !document.querySelector("#first-login-intro").open);
+      assert(await fixture.page.locator("#hub-view").isVisible());
+      assert(await fixture.page.locator("#welcome-ribbon-dock svg").isVisible());
+      assert.equal(await fixture.page.evaluate((key) => localStorage.getItem(key), introKey), "seen");
+      await assertNoBrowserCredentials(fixture.page);
+      await fixture.page.locator("#sign-out").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#auth-feedback").textContent.includes("signed out"));
+      const anonymousSession = fixture.page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/session");
+      await fixture.page.reload({ waitUntil: "commit" });
+      await anonymousSession;
+      await fixture.page.waitForLoadState("load");
+      assert(await fixture.page.locator("#auth-view").isVisible());
+      assert(await fixture.page.locator("#hub-view").isHidden());
+      assert.equal(await fixture.page.evaluate((key) => localStorage.getItem(key), introKey), "seen");
+      await fixture.page.locator("#auth-submit").click();
+      await fixture.page.waitForSelector("#hub-view:not([hidden])");
+      assert(!(await fixture.page.locator("#first-login-intro").evaluate((node) => node.open)));
+      await openCollection(fixture.page);
+      await assertEmptyCollection(fixture.page, "2026");
+      await assertNoBrowserCredentials(fixture.page);
+    });
+    await test("real account normal-motion entry preserves the voiced cinematic and automatically docks the ribbon", async () => {
+      const fixture = await createFixture(browser, { reducedMotion: "no-preference", mockSpeech: true }); contexts.push(fixture.context);
+      fixture.page.setDefaultTimeout(12000);
+      await fixture.page.locator("#auth-submit").click();
+      await fixture.page.waitForSelector('#first-login-intro[data-phase="dark"][open]');
+      assert.equal(await fixture.page.locator("#first-login-intro").getAttribute("data-reduced"), "false");
+      assert.equal(await fixture.page.locator('#first-login-intro button').filter({ hasText: /skip/i }).count(), 0);
+      await fixture.page.keyboard.press("Escape");
+      assert(await fixture.page.locator("#first-login-intro").evaluate((node) => node.open));
+      await fixture.page.waitForSelector('#first-login-intro[data-phase="unfurl"]');
+      await fixture.page.waitForSelector('#first-login-intro[data-phase="lettering"]');
+      assert.deepEqual(await fixture.page.evaluate(() => window.__spoken), ["Welcome to your Spinarium."]);
+      await fixture.page.waitForSelector('#first-login-intro[data-phase="dock"]');
+      await fixture.page.waitForSelector('#first-login-intro[data-phase="reveal"]');
+      await fixture.page.waitForFunction(() => !document.querySelector("#first-login-intro").open);
+      assert(await fixture.page.locator("#welcome-ribbon-dock svg").isVisible());
+      assert(await fixture.page.locator("#hub-view").isVisible());
+      await assertNoBrowserCredentials(fixture.page);
+      assertNoDemoRequests(fixture.observed.requests);
     });
     await test("server admin denial overrides editable claims and fabricated local privileges", async () => {
       assert(await page.locator("#admin-nav").isHidden());

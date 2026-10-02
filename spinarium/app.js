@@ -272,7 +272,7 @@ async function handleSession(session) {
     history.replaceState(null, "", "#update-password");
     return;
   }
-  if (preview && firstLoginIntro.show()) {
+  if (firstLoginIntro.show()) {
     // Keep login beneath the fade-to-black before revealing the layout.
     await new Promise(resolve => setTimeout(resolve, 400));
     if (epoch !== state.epoch || !auth.getSession()) return;

@@ -254,7 +254,7 @@ await test("backend rejection clears expired sessions and never exposes server e
     await rejectCode(service.saveVeiling(editorInput), code, SpinariumServiceError);
   }
   const duplicate = createSpinariumService(config, next, {
-    fetchImpl: async () => json({ error: { code: "NUMBER_IN_USE", message: "private-provider-detail" } }, 409),
+    fetchImpl: async () => json({ code: "NUMBER_IN_USE", message: "private-provider-detail" }, 409),
   });
   await rejectCode(duplicate.saveVeiling(editorInput), "NUMBER_IN_USE", SpinariumServiceError);
   next.invalidateSession();
