@@ -438,4 +438,113 @@ await test("preview admin login grants no real authentication, ownership or admi
   await auth.signOut();
 });
 
+const ownershipId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const ownershipDetail = () => ({
+  schemaVersion: "1", mode: "live",
+  ownership: { id: ownershipId, userId, veilingId, acquisition: "server_grant", physicalCardId: null, acquiredAt: "2026-10-02T12:00:00.000Z" },
+  veiling: { id: veilingId, number: null, name: "Test Veiling", description: "Recorded description", artworkUrl: null, contentStatus: "published" },
+});
+await test("ownership detail reads one protected record and allowlists its nullable projection", async () => {
+  const auth = await signedIn();
+  const calls = [];
+  const supplied = ownershipDetail();
+  supplied.ownership.internalNote = "private-provider-detail";
+  supplied.veiling.internalDraft = "private-provider-detail";
+  const service = createSpinariumService(config, auth, { fetchImpl: async (path, options) => {
+    calls.push({ path, options }); return json(supplied);
+  } });
+  assert.deepEqual(await service.getOwnershipDetail(ownershipId.toUpperCase()), ownershipDetail());
+  assert.equal(calls[0].path, `/api/ownerships/${ownershipId}`);
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.body, undefined);
+  assert.equal(calls[0].options.credentials, "same-origin");
+  assert.equal(calls[0].options.cache, "no-store");
+  for (const id of ["", "../private", null, `${ownershipId}?user=${otherId}`])
+    await rejectCode(service.getOwnershipDetail(id), "NOT_FOUND", SpinariumServiceError);
+  assert.equal(calls.length, 1);
+  auth.invalidateSession();
+});
+await test("ownership detail rejects foreign, mismatched, fabricated and unredacted metadata", async () => {
+  const auth = await signedIn();
+  const bad = [];
+  for (const patch of [{ userId: otherId }, { id: veilingId }, { veilingId: artworkId }, { acquiredAt: "not-a-date" },
+    { acquisition: "physical_claim" }, { physicalCardId: artworkId }]) {
+    const data = ownershipDetail(); Object.assign(data.ownership, patch); bad.push(data);
+  }
+  for (const patch of [{ id: artworkId }, { number: "001" }, { number: 0 }, { artworkUrl: "https://private.invalid/art.png" },
+    { contentStatus: "draft" }, { contentStatus: "redacted" }]) {
+    const data = ownershipDetail(); Object.assign(data.veiling, patch); bad.push(data);
+  }
+  for (const data of bad) {
+    const service = createSpinariumService(config, auth, { fetchImpl: async () => json(data) });
+    await rejectCode(service.getOwnershipDetail(ownershipId), "INVALID_PROJECTION", SpinariumServiceError);
+  }
+  const redacted = ownershipDetail();
+  Object.assign(redacted.veiling, { contentStatus: "redacted", name: null, description: null, artworkUrl: null });
+  const service = createSpinariumService(config, auth, { fetchImpl: async () => json(redacted) });
+  assert.deepEqual(await service.getOwnershipDetail(ownershipId), redacted);
+  auth.invalidateSession();
+});
+await test("late ownership responses cannot survive signout, session replacement or cancellation", async () => {
+  for (const change of ["signout", "replacement", "abort"]) {
+    const auth = await signedIn();
+    const controller = new AbortController();
+    let finish;
+    const service = createSpinariumService(config, auth, { fetchImpl: async () => new Promise(resolve => { finish = resolve; }) });
+    const pending = service.getOwnershipDetail(ownershipId, { signal: controller.signal });
+    if (change === "abort") controller.abort();
+    else {
+      auth.invalidateSession();
+      if (change === "replacement") await auth.consumeAuthCallback();
+    }
+    finish(json(ownershipDetail()));
+    await rejectCode(pending, change === "abort" ? "CANCELLED" : "AUTH_REQUIRED", SpinariumServiceError);
+    auth.invalidateSession();
+  }
+});
+await test("ownership not-found and preview return no fabricated records or server details", async () => {
+  const auth = await signedIn();
+  const service = createSpinariumService(config, auth, { fetchImpl: async () => json({ message: "private-provider-detail" }, 404) });
+  await rejectCode(service.getOwnershipDetail(ownershipId), "NOT_FOUND", SpinariumServiceError);
+  const preview = createPreviewAccess();
+  await assert.rejects(preview.service.getOwnershipDetail(ownershipId), { code: "NOT_FOUND" });
+  auth.invalidateSession();
+});
+await test("unavailable ownership details preserve the record only when all content fields are hidden", async () => {
+  const auth = await signedIn();
+  const unavailable = ownershipDetail();
+  Object.assign(unavailable.veiling, { contentStatus: "unavailable", number: null, name: null, description: null, artworkUrl: null });
+  const service = createSpinariumService(config, auth, { fetchImpl: async () => json(unavailable) });
+  assert.deepEqual(await service.getOwnershipDetail(ownershipId), unavailable);
+  for (const patch of [{ number: 1 }, { name: "Hidden name" }, { description: "Hidden draft text" }, { artworkUrl: `/api/artwork/${artworkId}` }]) {
+    const bad = structuredClone(unavailable);
+    Object.assign(bad.veiling, patch);
+    const incompatible = createSpinariumService(config, auth, { fetchImpl: async () => json(bad) });
+    await rejectCode(incompatible.getOwnershipDetail(ownershipId), "INVALID_PROJECTION", SpinariumServiceError);
+  }
+  auth.invalidateSession();
+});
+await test("unavailable dashboard entries retain own records but reject any content or discovery disclosure", async () => {
+  const auth = await signedIn();
+  const unavailable = dashboard();
+  unavailable.ownerships = [ownershipDetail().ownership];
+  unavailable.veilings = [{ id: veilingId, contentStatus: "unavailable", number: null, name: null, type: null,
+    origin: null, releaseDate: null, editionIds: [], artwork: [], lore: [] }];
+  const service = createSpinariumService(config, auth, { fetchImpl: async () => json(unavailable) });
+  assert.deepEqual(await service.getDashboard(), unavailable);
+  for (const patch of [{ number: 1 }, { name: "Hidden name" }, { type: "Hidden type" }, { origin: "Hidden origin" },
+    { releaseDate: "2026-10-02" }, { editionIds: [otherId] }, { artwork: [{ url: `/api/artwork/${artworkId}` }] },
+    { lore: [{ text: "Hidden draft text" }] }, { editionIds: null }, { lore: undefined }]) {
+    const bad = structuredClone(unavailable);
+    Object.assign(bad.veilings[0], patch);
+    const incompatible = createSpinariumService(config, auth, { fetchImpl: async () => json(bad) });
+    await rejectCode(incompatible.getDashboard(), "INVALID_PROJECTION", SpinariumServiceError);
+  }
+  for (const change of [data => { data.discoveries.push({ veilingId, status: "revealed" }); }, data => { data.ownerships = []; }]) {
+    const bad = structuredClone(unavailable); change(bad);
+    const incompatible = createSpinariumService(config, auth, { fetchImpl: async () => json(bad) });
+    await rejectCode(incompatible.getDashboard(), "INVALID_PROJECTION", SpinariumServiceError);
+  }
+  auth.invalidateSession();
+});
 console.log(`PASS ${passed} isolated Cloudflare browser adapter checks; no hosted provider or backend was contacted`);

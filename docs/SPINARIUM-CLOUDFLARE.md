@@ -75,6 +75,18 @@ See [accounts](SPINARIUM-ACCOUNTS.md), [activation](SPINARIUM-ACTIVATION.md), [a
 
 Production account verification passed 13 API requests and 12 actual browser checks; the original-site hosted suite passed 29 checks. Saved QA profiles/password hashes survived logout and relogin. Only the exact guarded test accounts were removed afterward, with credential/session cascade and empty account/admin/ownership counts verified; no real user data or blanket session collection was deleted. Temporary credential/cookie/request files were removed.
 
+## Ownership-record release
+
+The ownership-record update uses the existing migrations 0001–0003 and adds no schema changes. Release it from the ownership-only branch; do not package the cancelled cinematic branch or apply its migration 0004 to production. Staging already contains that additive migration from the cancelled prototype, which the ownership-only Worker does not use.
+
+`GET /api/ownerships/:id` is a session-scoped, read-only collector endpoint. Verify duplicate records, cross-account denial and active/draft transitions in isolated tests or disposable staging fixtures. Production collections remain empty until a separate issuance workflow is approved. Preserve saved users, roles, sessions and audit history during deployment.
+
+## Member showcase migration
+
+The member-showcase release adds `0005_member_showcase.sql`, independent of the cancelled film migration 0004. It creates approved member snapshots and their immutable audit without backfilling publication. Existing saved Veilings stay private until an administrator explicitly publishes them. Upcoming dates are labels and never schedule a publication.
+
+Apply only the reviewed 0005 migration to each target database after checking its ledger, then deploy the matching Worker and generated frontend. Do not blindly apply the original checkout's pending migrations: production must not receive cancelled 0004. Verify member reads, anonymous/private denial, draft isolation, publication revisions, artwork access and ownership preservation with disposable staging fixtures before production. Migration 0005 and the matching Worker/frontend are now deployed in both environments. Production version is `e88d5ce6-084f-4b34-a1f1-dadcb36b30cb`; its ledger omits cancelled 0004. See [verification](../VERIFICATION.md) for actual hosted results.
+
 ## Reproduce the active production package
 
 From the repository root:

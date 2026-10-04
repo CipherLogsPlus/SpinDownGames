@@ -10,7 +10,7 @@ Home has two choices: My Collection and Explore Veilings. Collection grid, filte
 
 The first-entry cinematic begins on black. A centered curved medieval ribbon with triangular ends unfurls from the middle, “Welcome to your Spinarium” appears with browser speech, pauses, then shrinks to the top while content fades in row by row. No Skip button or Escape shortcut is provided. Later entries bypass it through the browser-local `spinarium.preview.introduction.v3` preference. Reduced-motion visitors receive a brief still welcome with automatic entry and no voice/movement. Mute stops speech; blocked or unavailable speech never prevents entry. Timers and speech clear on logout or dialog closure.
 
-The current artwork and black-and-blue styling remain. Future art direction does not authorize replacing any asset before the owner's draft arrives.
+The 60-second film is cancelled. The short banner entrance, current artwork and black-and-blue styling remain.
 
 ## Cloudflare backend
 
@@ -21,6 +21,18 @@ The active production boundary is same-origin `/api/`. D1 uses its own SQLite mi
 `auth/supabase-auth.js`, `data/supabase-service.js` and `../supabase/spinarium-schema.sql` are retained unused historical groundwork. Earlier Supabase setup is superseded; do not configure a Supabase project for Spinarium. `data/demo-service.js` remains an isolated historical fixture and is never imported by the public application.
 
 See [activation](../docs/SPINARIUM-ACTIVATION.md), [migration](../docs/SPINARIUM-CLOUDFLARE.md), [accounts](../docs/SPINARIUM-ACCOUNTS.md), [administration](../docs/SPINARIUM-ADMIN.md), [architecture](../docs/SPINARIUM-ARCHITECTURE.md) and [handoff](../docs/SPINARIUM-HANDOFF.md).
+
+## Ownership records
+
+**Your records** lists individual ownership IDs and acquired dates. Each record has a bookmarkable page, and collection search accepts record IDs. Acquired-date sorting is available. Owned records remain visible when catalog content returns to draft; unfinished catalog details are hidden. Claims and issuance remain disabled, so catalog creation alone does not populate a collection.
+
+## Member showcase and Veiling Studio
+
+The live workflow is **Create Veiling → Save draft → Publish to Public or Upcoming**. Created Veilings are searchable and filterable. A name is enough to save an initial draft. Saved changes stay private until **Publish changes** is confirmed. Public means signed-in members; anonymous visitors do not receive showcase content.
+
+Upcoming offers **Coming soon** or an optional calendar date. Publishing is always manual. Administrators can move the approved version between Public and Upcoming or hide it without publishing pending edits. Members browse approved content from **Explore Veilings** and **Upcoming**, including with an empty collection. Viewing or publishing a Veiling grants no ownership or discovery.
+
+Migration 0005 and the matching Worker/frontend are deployed to staging and production; see [architecture](../docs/SPINARIUM-ARCHITECTURE.md). The cancelled film migration 0004 is not required.
 
 ## Run and verify locally
 
@@ -34,11 +46,14 @@ Open <http://127.0.0.1:8000/spinarium/>. Native modules require an HTTP server. 
 
 ```sh
 node scripts/verify-spinarium-domain.mjs
+node scripts/verify-spinarium-ownership.mjs
+node scripts/verify-spinarium-showcase.mjs
+node scripts/verify-spinarium-studio.mjs
 node scripts/verify-spinarium-intro.mjs
 NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify-spinarium.cjs
 NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify.cjs
 ```
 
-Browser verification requires Playwright and axe-core installed outside the public site; see the root README for setup. `BASE_URL`, `BROWSER_PATH` and `SCREENSHOT_DIR` select the served site, browser and optional screenshots. Backend local commands live with the isolated Worker package. Legacy Supabase adapter/database tests may be run as historical regressions; they do not verify D1 or activate accounts.
+Use Node.js 24 for the verification scripts. The focused browser suites are `scripts/verify-spinarium-ownership-browser.cjs` and `scripts/verify-spinarium-showcase-browser.cjs`, using the same environment settings below. Browser verification requires Playwright and axe-core installed outside the public site; see the root README for setup. `BASE_URL`, `BROWSER_PATH` and `SCREENSHOT_DIR` select the served site, browser and optional screenshots. Backend local commands live with the isolated Worker package. Legacy Supabase adapter/database tests may be run as historical regressions; they do not verify D1 or activate accounts.
 
 Local tests do not prove hosted signup/login, password persistence, cookies, remote D1/R2, DNS, TLS or replacement hosting. Record actual local and hosted outcomes separately in [VERIFICATION.md](../VERIFICATION.md). A push to GitHub `main` deploys static UI through Pages; it does not deploy the Worker or apply the D1 migration.

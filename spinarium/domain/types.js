@@ -9,7 +9,7 @@
  * @typedef {'demo'|'preview'|'live'} DataMode
  * @typedef {'owned'|'discovered'|'undiscovered'} CollectionState
  * @typedef {'all'|'owned'|'discovered'|'unowned'|'undiscovered'} CollectionFilter
- * @typedef {'number'|'name'|'rarity'|'release'} CollectionSort
+ * @typedef {'number'|'name'|'rarity'|'release'|'acquired-newest'|'acquired-oldest'} CollectionSort
  * @typedef {'engraving_art'|'color_art'|'silhouette_art'|'thumbnail'|'potential_3d_asset'|'variant_art'} ArtworkRole
  *
  * @typedef {Object} Artwork
@@ -32,7 +32,7 @@
  *
  * @typedef {Object} Veiling
  * @property {string} id
- * @property {number} number
+ * @property {number|null} number
  * @property {string|null} name Null for an undiscovered public projection.
  * @property {string|null} type
  * @property {string|null} origin
@@ -40,7 +40,7 @@
  * @property {Artwork[]} artwork
  * @property {Lore[]} lore
  * @property {string|null} releaseDate
- * @property {'draft'|'published'|'redacted'} contentStatus
+ * @property {'draft'|'published'|'redacted'|'unavailable'} contentStatus
  *
  * @typedef {Object} Rarity
  * @property {string} id

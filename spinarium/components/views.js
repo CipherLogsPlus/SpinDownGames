@@ -154,11 +154,7 @@ function metadata(detail, full = false) {
     ["Type", detail.veiling.type || "Not announced"],
     ["Rarity", detail.rarity?.label || "Not announced"],
     ["Edition", detail.edition?.name || "Not announced"],
-    ["Physical Serial", detail.physicalCard?.serial || "Not owned"],
-    [
-      "Claimed",
-      detail.ownership ? date(detail.ownership.acquiredAt) : "Not claimed",
-    ],
+    ...(detail.physicalCard?.serial ? [["Physical Serial", detail.physicalCard.serial]] : []),
     ["Origin", detail.veiling.origin || "Unknown"],
     [
       "First Discovered",
@@ -178,6 +174,29 @@ function metadata(detail, full = false) {
     dl.append(row);
   }
   return dl;
+}
+
+function ownershipRecords(detail) {
+  const section = el("section", "ownership-records");
+  section.append(el("h3", "", "Your records"));
+  const list = el("ul", "ownership-list");
+  for (const record of detail.ownerships) {
+    const row = el("li", "ownership-list-row");
+    const metadata = el("dl", "ownership-list-metadata");
+    const id = el("div");
+    id.append(el("dt", "", "Record ID"), el("dd", "ownership-id", record.id));
+    const acquired = el("div");
+    acquired.append(el("dt", "", "Acquired"), el("dd", "", Number.isFinite(Date.parse(record.acquiredAt)) ? date(record.acquiredAt) : "Not recorded"));
+    metadata.append(id, acquired);
+    const link = el("a", "ownership-record-link outlined-button", "View record");
+    link.href = "#ownership/" + encodeURIComponent(record.id);
+    link.setAttribute("aria-label", "View record " + record.id);
+    row.append(metadata, link);
+    list.append(row);
+  }
+  section.append(list);
+  if (!detail.ownerships.length) section.append(el("p", "", "No ownership records."));
+  return section;
 }
 
 export function renderDetail(detail) {
@@ -237,7 +256,7 @@ export function renderDetail(detail) {
     title,
     el("p", "detail-number", `// ${number(detail.number)}`),
     el("p", "detail-quote", detail.description),
-    metadata(detail),
+    ...(detail.unavailable ? [] : [metadata(detail)]),
   );
   main.append(portrait, info);
   const actions = el("div", "detail-actions");
@@ -260,12 +279,12 @@ export function renderDetail(detail) {
     ),
     action("Read more →", "details", ""),
   );
-  fragment.append(main, actions, lore);
+  fragment.append(main, actions, ownershipRecords(detail), ...(detail.unavailable ? [] : [lore]));
   return fragment;
 }
 
 export function renderFullDetail(detail) {
-  const grid = el("div", "full-detail-grid");
+  const grid = el("div", "full-detail-grid" + (detail.colorArt ? " has-artwork" : ""));
   if (detail.colorArt)
     grid.append(
       image(detail.colorArt, `Artwork for ${detail.displayName}`, "", true),
@@ -281,9 +300,9 @@ export function renderFullDetail(detail) {
     ),
     title,
     el("p", "detail-quote", detail.description),
-    metadata(detail, true),
-    el("h3", "", "Lore"),
-    el("p", "", detail.lore?.text || "Awaiting discovery."),
+    ...(detail.unavailable ? [] : [metadata(detail, true)]),
+    ownershipRecords(detail),
+    ...(detail.unavailable ? [] : [el("h3", "", "Lore"), el("p", "", detail.lore?.text || "Awaiting discovery.")]),
   );
   grid.append(content);
   return grid;

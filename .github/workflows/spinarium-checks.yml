@@ -46,4 +46,7 @@ jobs:
           node ../../scripts/verify-spinarium-cloudflare.mjs
           node ../../scripts/verify-spinarium-account-admin-adapter.mjs
           node ../../scripts/verify-spinarium-domain.mjs
+          node ../../scripts/verify-spinarium-ownership.mjs
+          node ../../scripts/verify-spinarium-showcase.mjs
+          node ../../scripts/verify-spinarium-studio.mjs
           node ../../scripts/verify-spinarium-intro.mjs

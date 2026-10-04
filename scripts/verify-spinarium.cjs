@@ -1,6 +1,6 @@
 // Browser checks intercept only local, test-only Worker responses. They do not
 // verify Cloudflare account access, deployment, DNS, or hosted cookies.
-// NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify-spinarium.cjs
+// NODE_PATH=/path/to/browser-tools/node_modules BROWSER_PATH=/path/to/chromium node scripts/verify-spinarium.cjs
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -12,6 +12,7 @@ const root = path.resolve(__dirname, "..");
 const preservationRef = process.env.PRESERVATION_REF || "a7e1dad";
 const git = (...args) => execFileSync("git", args, { cwd: root, maxBuffer: 32 * 1024 * 1024 });
 const issues = [];
+const contexts = [];
 let passed = 0;
 const introKey = "spinarium.preview.introduction.v3";
 const fixtureCookie = "spinarium-browser-test-only-session";
@@ -65,8 +66,13 @@ function ownedSnapshot() {
   return snapshot;
 }
 const test = async (name, fn) => {
+  const retainedContexts = contexts.length;
   try { await fn(); passed++; console.log(`PASS ${name}`); }
   catch (error) { issues.push(`${name}: ${error.message}`); console.error(`FAIL ${name}: ${error.message}`); }
+  finally {
+    // Keep shared fixtures; release each case's independent browsers promptly.
+    await Promise.all(contexts.splice(retainedContexts).map((context) => context.close()));
+  }
 };
 function observe(page) {
   const errors = [], failedResponses = [], requests = [];
@@ -194,6 +200,7 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
     if (!state.signedIn) return respond({ error: "UNAUTHORIZED" }, 401);
     assert(headers.cookie?.includes(fixtureCookie));
     if (url.pathname === "/api/dashboard" && method === "GET") return state.expireDashboard ? respond({ error: "UNAUTHORIZED" }, 401) : respond(scenario === "owned" ? ownedSnapshot() : emptySnapshot());
+    if (url.pathname === "/api/showcase" && method === "GET") return respond({ schemaVersion: "1", mode: "live", veilings: [] });
     if (url.pathname === "/api/admin/access" && method === "GET") return respond({ admin: state.admin, role: state.actorRole });
     if (url.pathname.startsWith("/api/admin/accounts")) {
       if (!state.admin || state.accountDenied) return respond({ code: "ADMIN_REQUIRED", message: "Private account email must not leak" }, 403);
@@ -260,7 +267,7 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
       if (!state.admin) return respond({ error: "FORBIDDEN" }, 403);
       assert.equal(headers["x-csrf-token"], fixtureCsrf);
       const input = request.postDataJSON();
-      const row = { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", name: input.name, description: input.description, character_number: input.number, status: input.status, rarity: input.rarity, edition: input.edition, artworkUrl: null, revision: 1 };
+      const row = { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", name: input.name, description: input.description, character_number: input.number, status: input.status, rarity: input.rarity, edition: input.edition, artworkUrl: null, revision: 1, publication: null };
       state.adminRows = [row];
       return respond(row, 201);
     }
@@ -353,7 +360,6 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
 }
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.BROWSER_PATH || undefined, args: ["--no-sandbox", "--enable-unsafe-swiftshader"] });
-  const contexts = [];
   try {
     await test("homepage, artwork, shared styles, and GitHub Pages configuration remain unchanged from main", async () => {
       // The migration intentionally changes Spinarium adapters, verification,
@@ -697,7 +703,8 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
       await page.waitForSelector("#route-title");
       assert.match(await page.locator("#route-title").innerText(), /admin access required/i);
       assert(await page.locator("#admin-view").isHidden());
-      await page.evaluate(() => document.querySelector("#admin-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+      assert.equal(await page.locator("#veiling-studio-content").textContent(), "");
+      assert.equal(await page.locator("#studio-editor-form, #studio-create").count(), 0);
       assert(!calls.some((call) => call.path === "/api/admin/veilings"));
       await page.evaluate(() => { localStorage.clear(); location.hash = "collection?filter=owned"; });
       await page.waitForSelector("#dashboard-view:not([hidden])");
@@ -780,44 +787,47 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
       assert(await fixture.page.locator("#collection-grid [data-card-id]").evaluate((node) => document.activeElement === node));
       assertNoDemoRequests(fixture.observed.requests);
     });
-    await test("server-authorized catalog creation sends CSRF and never grants collector ownership", async () => {
+    await test("server-authorized studio draft creation sends CSRF and never publishes or grants collector ownership", async () => {
       const fixture = await createFixture(browser, { signedIn: true, scenario: "admin" }); contexts.push(fixture.context);
       await fixture.page.waitForSelector("#hub-view:not([hidden])");
       assert(!(await fixture.page.locator("#admin-nav").evaluate((node) => node.hidden)));
       await fixture.page.evaluate(() => { location.hash = "admin"; });
       await fixture.page.waitForSelector("#admin-view:not([hidden])");
-      await fixture.page.locator("#admin-name").fill("Test-only catalog entry");
-      await fixture.page.locator("#admin-description").fill("Test-only catalog description");
-      await fixture.page.locator("#admin-save").click();
-      await fixture.page.waitForFunction(() => document.querySelector("#admin-feedback").textContent.includes("No collector ownership has been changed"));
+      await fixture.page.locator("#studio-create").click();
+      await fixture.page.locator("#studio-name").fill("Test-only catalog entry");
+      await fixture.page.locator("#studio-description").fill("Test-only catalog description");
+      await fixture.page.locator("#studio-save").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#studio-editor-feedback")?.textContent.includes("Draft saved.") && !document.querySelector("#studio-save").disabled);
       assert(fixture.calls.some((call) => call.path === "/api/admin/veilings" && call.method === "POST" && call.csrf === fixtureCsrf));
-      assert.equal(await fixture.page.locator("#admin-list .admin-catalog-item").count(), 1);
-      await fixture.page.locator("#admin-list .admin-catalog-item").click();
-      await fixture.page.locator("#admin-name").fill("Unsaved administrator edit");
+      assert.equal(await fixture.page.locator("#studio-list .studio-list-item").count(), 1);
+      await fixture.page.locator("#studio-list .studio-list-item").click();
+      await fixture.page.locator("#studio-name").fill("Unsaved administrator edit");
       fixture.state.nextConflict = true;
-      await fixture.page.locator("#admin-save").click();
-      await fixture.page.waitForFunction(() => document.querySelector("#admin-feedback").textContent.includes("Select its current catalog entry"));
-      await fixture.page.waitForFunction(() => !document.querySelector("#admin-save").disabled);
-      assert.equal(await fixture.page.locator("#admin-name").inputValue(), "Unsaved administrator edit");
-      assert.equal(await fixture.page.locator("#admin-list strong").innerText(), "Concurrent server change");
-      await fixture.page.locator("#admin-list .admin-catalog-item").click();
-      assert.equal(await fixture.page.locator("#admin-name").inputValue(), "Concurrent server change");
-      await fixture.page.locator("#admin-name").fill("Administrator retry");
+      await fixture.page.locator("#studio-save").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#studio-editor-feedback")?.textContent.includes("changed elsewhere"));
+      assert(await fixture.page.locator("#studio-save").isDisabled());
+      assert.equal(await fixture.page.locator("#studio-name").inputValue(), "Unsaved administrator edit");
+      await fixture.page.locator("#studio-discard").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#studio-name")?.value === "Concurrent server change" && !document.querySelector("#studio-save").disabled);
+      assert.equal(await fixture.page.locator("#studio-list strong").innerText(), "Concurrent server change");
+      await fixture.page.locator("#studio-name").fill("Administrator retry");
       fixture.state.holdSave = true;
-      await fixture.page.locator("#admin-save").click();
-      await fixture.page.waitForFunction(() => document.querySelector("#admin-new").disabled);
-      assert(await fixture.page.locator("#admin-name").isDisabled());
-      assert(await fixture.page.locator("#admin-list .admin-catalog-item").isDisabled());
+      await fixture.page.locator("#studio-save").click();
+      await fixture.page.waitForFunction(() => document.querySelector("#studio-create").disabled);
+      assert(await fixture.page.locator("#studio-name").isDisabled());
+      assert(await fixture.page.locator("#studio-list .studio-list-item").isDisabled());
       await fixture.page.evaluate(() => {
-        document.querySelector("#admin-new").dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        document.querySelector("#admin-list .admin-catalog-item").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        document.querySelector("#studio-create").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        document.querySelector("#studio-list .studio-list-item").dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      assert.equal(await fixture.page.locator("#admin-name").inputValue(), "Administrator retry");
-      assert.equal(await fixture.page.locator("#admin-id").inputValue(), "dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+      assert.equal(await fixture.page.locator("#studio-name").inputValue(), "Administrator retry");
+      assert.equal(await fixture.page.locator('#studio-list [aria-pressed="true"]').getAttribute("data-veiling-id"), "dddddddd-dddd-4ddd-8ddd-dddddddddddd");
       assert.equal(typeof fixture.state.releaseSave, "function");
       fixture.state.releaseSave();
-      await fixture.page.waitForFunction(() => !document.querySelector("#admin-save").disabled);
-      assert.equal(await fixture.page.locator("#admin-list strong").innerText(), "Administrator retry");
+      await fixture.page.waitForFunction(() => !document.querySelector("#studio-save").disabled);
+      assert.equal(await fixture.page.locator("#studio-list strong").innerText(), "Administrator retry");
+      assert.equal(fixture.state.adminRows[0].publication, null);
+      assert(!fixture.calls.some(call => call.path.endsWith("/publication")));
 
       await fixture.page.evaluate(() => { location.hash = "collection?filter=owned"; });
       await fixture.page.waitForSelector("#dashboard-view:not([hidden])");

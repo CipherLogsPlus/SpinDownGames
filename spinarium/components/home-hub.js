@@ -10,7 +10,7 @@ export function renderHomeHub(snapshot) {
   const choices = el("div", "hub-choices");
   for (const [name, description, href, emblem] of [
     ["My Collection", `${getDashboardStats(snapshot).veilingsOwned} Veilings owned`, "#collection?filter=owned", "cards"],
-    ["Explore Veilings", "Uncollected Veilings and upcoming releases", "#explore?filter=discovered", "spark"],
+    ["Explore Veilings", "Veilings revealed to members, plus what’s coming next", "#explore?filter=discovered", "spark"],
   ]) {
     const choice = el("a", "hub-choice");
     choice.href = href;

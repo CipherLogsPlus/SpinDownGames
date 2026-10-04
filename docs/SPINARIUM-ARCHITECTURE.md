@@ -6,9 +6,9 @@ The former Supabase architecture is preserved in [the historical document](histo
 
 ## Current presentation
 
-Production `/spinarium/` opens actual email/password login/signup. The repository development config retains the explicit `admin` / `1234` preview; it supplies no production identity or administrator authority. The dashboard contains My Collection and Explore Veilings; other sections sit behind Menu. Collections start empty, decorative slots are black, and details open only after a card selection. Registration remains disabled. Catalog creation must never create ownership.
+Production `/spinarium/` opens actual email/password login/signup. The repository development config retains the explicit `admin` / `1234` preview; it supplies no production identity or administrator authority. The dashboard contains My Collection and Explore Veilings; other sections sit behind Menu. Collections start empty, decorative slots are black, and details open only after a card selection. Collectible claims remain disabled. Catalog creation must never create ownership.
 
-The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Per-account server onboarding state is not implemented; introduction completion remains browser-local. Generated staging and production configs disable preview and enable real `/api` password signup; the repository config retains the explicit development preview. Keep current artwork until the owner supplies a replacement draft. The planned space scene with a large purple Veil and no cube does not authorize an artwork change now.
+The first-entry ribbon cinematic and browser speech remain. Later entries bypass it through a browser-local preference; reduced motion is supported. Per-account server onboarding state is not implemented; introduction completion remains browser-local. Generated staging and production configs disable preview and enable real `/api` password signup; the repository config retains the explicit development preview. The 60-second film direction is cancelled. Keep the short banner entrance and current site artwork; future work should improve the functional app.
 
 ## Code and service boundaries
 
@@ -26,7 +26,25 @@ The first-entry ribbon cinematic and browser speech remain. Later entries bypass
 
 The active production boundary is same-origin `/api/` behind a Worker. D1 is private to trusted bindings, not exposed as a browser database API. D1 has its own SQLite schema; PostgreSQL roles, RLS policies and Supabase triggers are not portable permission enforcement. The Worker checks the session and administrator allowlist on each protected request, validates object access and accepted fields, and uses prepared SQL. Hiding UI controls is only presentation.
 
-Collectors receive their own non-draft ownership and corresponding definitions. Names/lore/artwork are redacted until the server records discovery as revealed. Drafts are currently withheld; an approved revision/publication policy is required before real ownership issuance so catalog edits cannot hide purchased content. Unowned definitions, private serials and artwork are not supplied as hidden browser metadata. Administrators may manage the catalog and artwork but cannot issue ownership through catalog APIs. Discovery, achievements, claims and production authority require later dedicated server operations; no current browser endpoint awards them.
+Collectors receive their own ownership records. The member showcase separately supplies only explicitly approved Public and Upcoming snapshots to signed-in members. Working drafts remain administrator-only. Approved snapshots supply the visible name, description and artwork for owned records while later draft edits stay private. An owned draft with no approved snapshot retains its record IDs and acquired dates but withholds catalog details and discovery metadata. Publication creates no ownership or discovery. Permanent issued-content history still requires a separate policy before commercial issuance. Private drafts and other collectors' records are never hidden browser metadata. Administrators may manage the catalog and artwork but cannot issue ownership through catalog APIs. Discovery, achievements, claims and production authority require later dedicated server operations; no current browser endpoint awards them.
+
+## Individual ownership records
+
+Collectors can open **Your records** from a Veiling and bookmark `#ownership/<UUID>`. `GET /api/ownerships/:id` scopes the read to the current session; malformed, absent and other-account IDs return the same not-found response. Administrator status does not widen this endpoint. Responses are not cached, and private requests/views are cancelled on route or account changes. A valid bookmarked destination survives sign-in in memory.
+
+Search matches names, numbers and owned record IDs. Newest acquired uses the latest owned timestamp within a Veiling group; Oldest acquired uses the earliest. Undated groups sort last. Physical serials are omitted when absent, and the internal acquisition source is not displayed. These records do not establish physical-card identity or enable issuance.
+
+Owned drafts project `contentStatus: "unavailable"`, with neutral copy and no catalog details. A fresh unavailable response redacts matching cached and hidden views, including older dashboard responses still in flight. Subsequent fresh reads may restore published content. This is response-driven invalidation. Approved member snapshots are current publication state; they are not a permanent history of issued content.
+
+## Member showcase and Veiling Studio
+
+The released workflow adds **Menu → Veiling Studio** with **Create Veiling**, **Save draft**, and a searchable **Created Veilings** list. A name is enough to start; description, number, rarity, edition and artwork can be added later. Draft saves never change the member version.
+
+Admins explicitly preview and publish a saved draft as **Public** or **Upcoming**, publish later changes, move an approved version between those sections, or hide it. Here Public means signed-in members. Upcoming displays either **Coming soon** or a calendar date. Dates do not trigger publication, including after they pass. Moving an approved version preserves its content while pending draft edits remain private.
+
+`GET /api/showcase` and `GET /api/showcase/:id` expose approved projections only. `POST /api/admin/veilings/:id/publication` uses CSRF, revision checks, current session/admin authority and an atomic audit. Migration `0005_member_showcase.sql` creates the separate snapshot and append-only audit tables and publishes no existing rows. Publication does not grant ownership, claims, achievements or discovery. No anonymous catalog is provided.
+
+The matching Worker, frontend and migration 0005 are deployed to staging and production. See [verification](../VERIFICATION.md) for hosted checks and preservation results.
 
 ## Authentication and administration
 

@@ -1,5 +1,38 @@
 # Website and Spinarium verification
 
+## Member showcase production activation — 3 October 2026
+
+The owner authorized the release. Source implementation `b4356ba` passed GitHub Worker CI with 78/78 backend tests, all adapter/domain checks and three deployment dry runs. The local browser verification passed 95 checks. The cancelled film and migration 0004 are absent from this release.
+
+Migration `0005_member_showcase.sql` was applied through Wrangler to staging and production, seven statements in each, without replaying earlier migrations or publishing existing catalog rows. Production ledger is 0001, 0002, 0003, 0005; staging retains its historical 0004 entry. Matching Worker and 50 served assets plus `_headers` are deployed:
+
+- Staging version: `a0c4a0ab-f476-4e26-b735-ebcc6ed251a1`.
+- Production version: `e88d5ce6-084f-4b34-a1f1-dadcb36b30cb` at <https://spindowngames.com/spinarium/>.
+- Previous production version retained for code rollback: `f6829d31-f35b-4819-b234-8aaa92ef95aa`. Keep the additive schema and saved records during rollback.
+
+Actual staged signup/login and independent administrator/member browsers passed seven end-to-end acceptance groups: private draft creation, permission/Origin/CSRF denials, explicit Public approval, later private edits, Upcoming date/Coming soon changes preserving approved content, manual publishing with past dates, and hiding. Both accounts retained zero ownership. The browser navigation check used document/UI readiness after a network-idle timeout; the application required no change.
+
+After verification, the exact test Veiling was hidden and the two QA accounts were disabled. Their administrator grant, sessions, reset credentials and password credentials were removed. Staging retains one private fixture catalog row and its required inactive actor/audit references: seven publication audit entries and 19 account audit entries. No audit was deleted. No active QA account, session, administrator, publication or ownership remains.
+
+Both environments passed hosted checks for all 50 asset hashes, health, anonymous showcase/ownership/admin denial, private-source 404s and absent film media. Production additionally passed 13 actual anonymous browser checks covering new assets, gated routes, phone layout, policy/home navigation and runtime errors. Those checks do not claim a production owner login: the operator did not access that account.
+
+A private read-only before/after production comparison passed at 2026-10-04 01:19:27 UTC. The original account profile and authority digest is unchanged; one credential, one session, one owner and the existing catalog row remain. Ownership, publication and discovery counts remain zero; five catalog audit and 12 account audit records remain. No existing entry was automatically published. R2 remains unbound, so hosted artwork uploads still require separate storage setup.
+
+## Member showcase and Veiling Studio — local update, 3 October 2026
+
+Implemented members-only approved content, private draft editing, explicit Public/Upcoming/hide controls, and optional informational dates. The 60-second film is cancelled; the banner entrance remains. New migration 0005 publishes no existing catalog rows and does not depend on the cancelled migration 0004. The later hosted release is recorded above.
+
+Completed local checks:
+
+- The Worker suite passed 77/77 before the final approved-number uniqueness and publication-input guards. After those guards, the final publication suite passed 11/11, including absent-publication rejection, atomic conflict/audit rollback, number reuse and current-session/role checks. Final TypeScript check and Worker build passed.
+- New showcase adapter/domain checks passed 15/15; Studio policy/image checks passed 7/7. The existing Cloudflare adapter passed 26 checks, account-administration adapter passed 24, ownership controller passed six, and domain/banner checks passed.
+- Focused showcase browser checks passed 11/11. They cover zero-ownership member access, private-draft absence, Upcoming dates including past dates, explicit publication previews, private edits, visibility moves, conflicts, failed uploads, logout races, keyboard operation, mobile layout and enlarged text.
+- The adapted baseline browser suite passed 71/71 and ownership browser regression passed 13/13 using local API fixtures (95 distinct browser checks including the showcase suite). Desktop and phone Studio/showcase screenshots were visually reviewed. Fictional fixtures and placeholder artwork are test data only, outside the served site.
+
+The enabled production package dry run passed without remote changes: 50 served assets plus `_headers`. The new showcase/Studio modules match source; the public allowlist excludes tests, backend code, migrations, dependencies and film media.
+
+Browser fixtures and local D1/R2 tests do not establish hosted authorization, storage availability or a completed production release. Hosted artwork uploads still require the R2 binding described in the deployment guide. Existing accounts, ownership, roles, sessions and audit must be preserved in a later release.
+
 ## Account-management production activation — 2 October 2026
 
 The owner authorized a protected account directory, disable/restore/session/recovery controls for regular administrators, and a single highest owner who can manage regular administrators. The owner designated their existing saved account; the trusted operator resolved its exact account ID and creation record privately and provisioned that exact active account through a guarded audited transaction. Final trusted reads reconfirmed the account is active, its authoritative and directory roles are owner, there is exactly one owner, and its grant has one audit event. All its existing sessions were revoked; a fresh sign-in is required for **Menu → Accounts**. The operator never signed in as the owner or inspected its credentials/session secrets, and no owner email or UUID is published here.

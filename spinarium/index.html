@@ -19,6 +19,7 @@
       crossorigin
     />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="veiling-studio.css" />
     <script type="module" src="app.js"></script>
     <title>Spinarium — SpinDownGames™</title>
   </head>
@@ -307,7 +308,8 @@
                     ><input
                       id="collection-search"
                       type="search"
-                      placeholder="Search your collection…"
+                      placeholder="Search collection…"
+                      aria-describedby="collection-search-help"
                       maxlength="100"
                       autocomplete="off"
                   /></label>
@@ -318,10 +320,13 @@
                       <option value="name">Sort: Name</option>
                       <option value="rarity">Sort: Rarity</option>
                       <option value="release">Sort: Release</option>
+                      <option value="acquired-newest">Newest acquired</option>
+                      <option value="acquired-oldest">Oldest acquired</option>
                     </select></label
                   >
                 </div>
               </div>
+              <p id="collection-search-help" class="collection-search-help">Search by name, number, or record ID.</p>
               <div id="collection-grid" class="collection-grid"></div>
               <p
                 id="collection-status"
@@ -380,90 +385,11 @@
         <section id="admin-accounts-view" class="panel route-panel" aria-labelledby="accounts-title" hidden>
           <div id="admin-accounts-content"></div>
         </section>
-        <section
-          id="admin-view"
-          class="panel route-panel"
-          aria-labelledby="admin-title"
-          hidden
-        >
-          <p class="eyebrow">Protected content administration</p>
+        <section id="admin-view" class="panel route-panel" aria-labelledby="admin-title" hidden>
+          <p class="eyebrow">Content administration</p>
           <h2 id="admin-title" tabindex="-1">Veiling Studio</h2>
-          <p class="route-intro">
-            Add approved character definitions, descriptions, and artwork.
-            Catalog changes do not grant ownership to collectors.
-          </p>
-          <div class="admin-layout">
-            <form id="admin-form">
-              <input id="admin-id" type="hidden" />
-              <div class="auth-field">
-                <label for="admin-name">Veiling name</label
-                ><input id="admin-name" type="text" maxlength="120" required />
-              </div>
-              <div class="auth-field">
-                <label for="admin-description">Description / lore</label
-                ><textarea
-                  id="admin-description"
-                  rows="5"
-                  maxlength="10000"
-                  required
-                ></textarea>
-              </div>
-              <div class="admin-row">
-                <div class="auth-field">
-                  <label for="admin-number"
-                    >Character number <span>(optional)</span></label
-                  ><input
-                    id="admin-number"
-                    type="number"
-                    min="1"
-                    max="999999"
-                  />
-                </div>
-                <div class="auth-field">
-                  <label for="admin-status">Catalog status</label
-                  ><select id="admin-status">
-                    <option value="draft">Draft</option>
-                    <option value="active">Active</option>
-                    <option value="retired">Retired</option>
-                  </select>
-                </div>
-              </div>
-              <div class="admin-row">
-                <div class="auth-field">
-                  <label for="admin-rarity"
-                    >Rarity <span>(optional)</span></label
-                  ><input id="admin-rarity" maxlength="80" />
-                </div>
-                <div class="auth-field">
-                  <label for="admin-edition"
-                    >Edition <span>(optional)</span></label
-                  ><input id="admin-edition" maxlength="120" />
-                </div>
-              </div>
-              <div class="auth-field">
-                <label for="admin-artwork"
-                  >Full-color artwork
-                  <span>(PNG, JPEG, WebP · up to 8 MB)</span></label
-                ><input
-                  id="admin-artwork"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                />
-              </div>
-              <div class="admin-actions">
-                <button id="admin-save" class="outlined-button" type="submit">
-                  Save Veiling</button
-                ><button id="admin-new" class="outlined-button" type="button">
-                  New Veiling
-                </button>
-              </div>
-              <p id="admin-feedback" class="form-feedback" role="status"></p>
-            </form>
-            <section aria-labelledby="admin-catalog-title">
-              <h3 id="admin-catalog-title">Your catalog</h3>
-              <div id="admin-list" class="admin-list"></div>
-            </section>
-          </div>
+          <p class="route-intro">Work on your Veilings at your own pace. Save drafts privately and publish approved versions for members.</p>
+          <div id="veiling-studio-content"></div>
         </section>
         <noscript
           ><section class="panel no-script">

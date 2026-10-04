@@ -1248,6 +1248,7 @@ p {
   grid-template-columns: 45% 1fr;
   gap: 28px;
 }
+.full-detail-grid:not(.has-artwork) { grid-template-columns: minmax(0, 1fr); }
 .full-detail-grid > img {
   width: 100%;
   border: 1px solid #455967;
@@ -2762,6 +2763,7 @@ body:not(.auth-gated) .dashboard-layout:not(.has-selection) { grid-template-colu
 .collection-page-header .claim-entry { margin: 0; min-height: 44px; }
 .collection-page-header .claim-entry, .stat-card span { font-size: .875rem; }
 .collection-toolbar { flex-wrap: wrap; padding-block: 12px; }
+.collection-search-help { margin: 0 0 14px; color: #b0bdd1; font-size: .75rem; line-height: 1.5; }
 body.intro-staging #hub-view { opacity: 0; }
 @media (max-width: 640px) {
   body.hub-route .hero { min-height: 150px; }
@@ -3001,6 +3003,56 @@ body.intro-staging #hub-view { opacity: 0; }
 .accounts-reset-link-panel .auth-field { margin-bottom: 10px; }
 .accounts-reset-link-panel input { font-size: .8125rem; }
 .accounts-reset-link-panel .accounts-feedback { margin-bottom: 0; }
+
+.ownership-records { margin: 20px 0; min-width: 0; }
+.ownership-records h3 { margin: 0 0 12px; font-size: 1rem; }
+.ownership-list { list-style: none; padding: 0; margin: 0; }
+.ownership-list-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 0; border-top: 1px solid #455769; }
+.ownership-list-metadata { flex: 1 1 210px; min-width: 0; margin: 0; }
+.ownership-list-metadata > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; margin: 5px 0; }
+.ownership-list dt, .ownership-record-metadata dt { color: #abbad0; font-size: .8125rem; }
+.ownership-list dd, .ownership-record-metadata dd { margin: 0; font-size: .8125rem; color: #e0eafb; }
+.ownership-id { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.ownership-record-link, .ownership-back { min-height: 44px; padding: 10px 14px; font-size: .8125rem; text-decoration: none; }
+.ownership-record-page { max-width: 820px; min-width: 0; }
+.ownership-back { width: fit-content; margin-bottom: 24px; }
+.ownership-record-page h2 { margin: 0 0 24px; }
+.ownership-record-status { line-height: 1.7; }
+.ownership-record-page > button { min-height: 44px; padding: 10px 18px; margin-top: 16px; font-size: .875rem; }
+.ownership-record-metadata { margin: 0 0 28px; }
+.ownership-record-metadata > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; border-bottom: 1px solid #455769; padding: 14px 0; }
+.ownership-veiling { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 24px; }
+.ownership-veiling > div { flex: 1 1 260px; min-width: 0; }
+.ownership-veiling h3 { font-size: 1.375rem; margin: 8px 0 14px; overflow-wrap: anywhere; }
+.ownership-artwork { width: min(100%, 240px); max-height: 340px; object-fit: contain; border-radius: 4px; }
+.ownership-description { color: #c8d4e3; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.showcase-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 24px 0; }
+.showcase-controls .auth-field { flex: 1 1 240px; margin: 0; max-width: 560px; }
+.showcase-controls input { display: block; width: 100%; margin-top: 8px; }
+.showcase-controls button, .showcase-back { min-height: 44px; padding: 10px 16px; }
+.showcase-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 20px; }
+.showcase-card { display: flex; flex-direction: column; overflow: hidden; min-width: 0; border: 1px solid #3d5266; border-radius: 6px; background: #0b121a; color: #edf4fc; text-decoration: none; }
+.showcase-card:hover { border-color: #82b9dd; background: #101c28; }
+.showcase-card-artwork { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #080c11; }
+.showcase-card-copy { padding: 22px; display: flex; flex-direction: column; align-items: start; flex: 1; }
+.showcase-card h3 { margin: 8px 0 12px; font-size: 1.3rem; overflow-wrap: anywhere; }
+.showcase-release, .showcase-owned { display: inline-block; color: #b7d7f4; font-size: .875rem; line-height: 1.5; }
+.showcase-excerpt { color: #b9c6d4; font-size: .9375rem; line-height: 1.65; overflow-wrap: anywhere; }
+.showcase-view { margin-top: auto; padding-top: 18px; color: #c1e1fa; font-size: .875rem; }
+.showcase-status { margin: 22px 0; color: #b9c6d4; line-height: 1.7; }
+.showcase-back { display: inline-flex; width: fit-content; margin: 0 0 24px; text-decoration: none; }
+.showcase-detail { display: flex; flex-wrap: wrap; align-items: start; gap: 32px; margin-top: 24px; }
+.showcase-detail-artwork { width: min(100%, 360px); max-height: 520px; object-fit: contain; border-radius: 6px; }
+.showcase-detail-copy { flex: 1 1 280px; min-width: 0; }
+.showcase-description { line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.showcase-properties { margin: 24px 0; }
+.showcase-properties > div { display: flex; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid #354555; padding: 12px 0; }
+.showcase-properties dt { min-width: 80px; color: #aebfd0; }
+.showcase-properties dd { margin: 0; overflow-wrap: anywhere; }
+.showcase-ownership { color: #b7c7d6; margin-top: 28px; }
+@media (max-width: 420px) {
+  .ownership-record-metadata > div { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+}
 @media (max-width: 1100px) {
   .accounts-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .accounts-search-field { grid-column: span 2; }
