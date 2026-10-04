@@ -83,9 +83,9 @@ The ownership-record update uses the existing migrations 0001–0003 and adds no
 
 ## Member showcase migration
 
-The local member-showcase release adds `0005_member_showcase.sql`, independent of the cancelled film migration 0004. It creates approved member snapshots and their immutable audit without backfilling publication. Existing saved Veilings stay private until an administrator explicitly publishes them. Upcoming dates are labels and never schedule a publication.
+The member-showcase release adds `0005_member_showcase.sql`, independent of the cancelled film migration 0004. It creates approved member snapshots and their immutable audit without backfilling publication. Existing saved Veilings stay private until an administrator explicitly publishes them. Upcoming dates are labels and never schedule a publication.
 
-Apply only the reviewed 0005 migration to each target database after checking its ledger, then deploy the matching Worker and generated frontend. Do not blindly apply the original checkout's pending migrations: production must not receive cancelled 0004. Verify member reads, anonymous/private denial, draft isolation, publication revisions, artwork access and ownership preservation with disposable staging fixtures before production. This section documents local work, not a completed deployment.
+Apply only the reviewed 0005 migration to each target database after checking its ledger, then deploy the matching Worker and generated frontend. Do not blindly apply the original checkout's pending migrations: production must not receive cancelled 0004. Verify member reads, anonymous/private denial, draft isolation, publication revisions, artwork access and ownership preservation with disposable staging fixtures before production. Migration 0005 and the matching Worker/frontend are now deployed in both environments. Production version is `e88d5ce6-084f-4b34-a1f1-dadcb36b30cb`; its ledger omits cancelled 0004. See [verification](../VERIFICATION.md) for actual hosted results.
 
 ## Reproduce the active production package
 

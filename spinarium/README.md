@@ -28,11 +28,11 @@ See [activation](../docs/SPINARIUM-ACTIVATION.md), [migration](../docs/SPINARIUM
 
 ## Member showcase and Veiling Studio
 
-The new local workflow is **Create Veiling → Save draft → Publish to Public or Upcoming**. Created Veilings are searchable and filterable. A name is enough to save an initial draft. Saved changes stay private until **Publish changes** is confirmed. Public means signed-in members; anonymous visitors do not receive showcase content.
+The live workflow is **Create Veiling → Save draft → Publish to Public or Upcoming**. Created Veilings are searchable and filterable. A name is enough to save an initial draft. Saved changes stay private until **Publish changes** is confirmed. Public means signed-in members; anonymous visitors do not receive showcase content.
 
 Upcoming offers **Coming soon** or an optional calendar date. Publishing is always manual. Administrators can move the approved version between Public and Upcoming or hide it without publishing pending edits. Members browse approved content from **Explore Veilings** and **Upcoming**, including with an empty collection. Viewing or publishing a Veiling grants no ownership or discovery.
 
-This update requires migration 0005 and matching Worker/frontend deployment; see [architecture](../docs/SPINARIUM-ARCHITECTURE.md). The cancelled film migration 0004 is not required.
+Migration 0005 and the matching Worker/frontend are deployed to staging and production; see [architecture](../docs/SPINARIUM-ARCHITECTURE.md). The cancelled film migration 0004 is not required.
 
 ## Run and verify locally
 

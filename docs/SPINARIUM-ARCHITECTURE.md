@@ -38,13 +38,13 @@ Owned drafts project `contentStatus: "unavailable"`, with neutral copy and no ca
 
 ## Member showcase and Veiling Studio
 
-This local release adds **Menu → Veiling Studio** with **Create Veiling**, **Save draft**, and a searchable **Created Veilings** list. A name is enough to start; description, number, rarity, edition and artwork can be added later. Draft saves never change the member version.
+The released workflow adds **Menu → Veiling Studio** with **Create Veiling**, **Save draft**, and a searchable **Created Veilings** list. A name is enough to start; description, number, rarity, edition and artwork can be added later. Draft saves never change the member version.
 
 Admins explicitly preview and publish a saved draft as **Public** or **Upcoming**, publish later changes, move an approved version between those sections, or hide it. Here Public means signed-in members. Upcoming displays either **Coming soon** or a calendar date. Dates do not trigger publication, including after they pass. Moving an approved version preserves its content while pending draft edits remain private.
 
 `GET /api/showcase` and `GET /api/showcase/:id` expose approved projections only. `POST /api/admin/veilings/:id/publication` uses CSRF, revision checks, current session/admin authority and an atomic audit. Migration `0005_member_showcase.sql` creates the separate snapshot and append-only audit tables and publishes no existing rows. Publication does not grant ownership, claims, achievements or discovery. No anonymous catalog is provided.
 
-This work requires a matching Worker, frontend and migration deployment. Local verification alone does not make it live.
+The matching Worker, frontend and migration 0005 are deployed to staging and production. See [verification](../VERIFICATION.md) for hosted checks and preservation results.
 
 ## Authentication and administration
 

@@ -1,8 +1,26 @@
 # Website and Spinarium verification
 
+## Member showcase production activation — 3 October 2026
+
+The owner authorized the release. Source implementation `b4356ba` passed GitHub Worker CI with 78/78 backend tests, all adapter/domain checks and three deployment dry runs. The local browser verification passed 95 checks. The cancelled film and migration 0004 are absent from this release.
+
+Migration `0005_member_showcase.sql` was applied through Wrangler to staging and production, seven statements in each, without replaying earlier migrations or publishing existing catalog rows. Production ledger is 0001, 0002, 0003, 0005; staging retains its historical 0004 entry. Matching Worker and 50 served assets plus `_headers` are deployed:
+
+- Staging version: `a0c4a0ab-f476-4e26-b735-ebcc6ed251a1`.
+- Production version: `e88d5ce6-084f-4b34-a1f1-dadcb36b30cb` at <https://spindowngames.com/spinarium/>.
+- Previous production version retained for code rollback: `f6829d31-f35b-4819-b234-8aaa92ef95aa`. Keep the additive schema and saved records during rollback.
+
+Actual staged signup/login and independent administrator/member browsers passed seven end-to-end acceptance groups: private draft creation, permission/Origin/CSRF denials, explicit Public approval, later private edits, Upcoming date/Coming soon changes preserving approved content, manual publishing with past dates, and hiding. Both accounts retained zero ownership. The browser navigation check used document/UI readiness after a network-idle timeout; the application required no change.
+
+After verification, the exact test Veiling was hidden and the two QA accounts were disabled. Their administrator grant, sessions, reset credentials and password credentials were removed. Staging retains one private fixture catalog row and its required inactive actor/audit references: seven publication audit entries and 19 account audit entries. No audit was deleted. No active QA account, session, administrator, publication or ownership remains.
+
+Both environments passed hosted checks for all 50 asset hashes, health, anonymous showcase/ownership/admin denial, private-source 404s and absent film media. Production additionally passed 13 actual anonymous browser checks covering new assets, gated routes, phone layout, policy/home navigation and runtime errors. Those checks do not claim a production owner login: the operator did not access that account.
+
+A private read-only before/after production comparison passed at 2026-10-04 01:19:27 UTC. The original account profile and authority digest is unchanged; one credential, one session, one owner and the existing catalog row remain. Ownership, publication and discovery counts remain zero; five catalog audit and 12 account audit records remain. No existing entry was automatically published. R2 remains unbound, so hosted artwork uploads still require separate storage setup.
+
 ## Member showcase and Veiling Studio — local update, 3 October 2026
 
-Implemented members-only approved content, private draft editing, explicit Public/Upcoming/hide controls, and optional informational dates. The 60-second film is cancelled; the banner entrance remains. New migration 0005 publishes no existing catalog rows and does not depend on the cancelled migration 0004. This update has not been deployed or migrated remotely.
+Implemented members-only approved content, private draft editing, explicit Public/Upcoming/hide controls, and optional informational dates. The 60-second film is cancelled; the banner entrance remains. New migration 0005 publishes no existing catalog rows and does not depend on the cancelled migration 0004. The later hosted release is recorded above.
 
 Completed local checks:
 
