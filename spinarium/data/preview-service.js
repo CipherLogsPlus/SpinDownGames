@@ -23,6 +23,20 @@ export function createPreviewAccess() {
   const service = {
     getCapabilities: () => ({ authentication: false, claims: false, transfers: false, notifications: false, threeDimensionalView: false }),
     async getAdminAccess() { return false; },
+    async getShowcase() {
+      if (!session) throw new Error("Open the preview first.");
+      return [];
+    },
+    async getShowcaseVeiling() {
+      const error = new Error("Veiling not found");
+      error.code = "NOT_FOUND";
+      throw error;
+    },
+    async getOwnershipDetail() {
+      const error = new Error("Ownership record not found");
+      error.code = "NOT_FOUND";
+      throw error;
+    },
     async getDashboard() {
       if (!session) throw new Error("Open the preview first.");
       return {

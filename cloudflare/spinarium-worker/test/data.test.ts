@@ -115,7 +115,7 @@ test('catalog revisions prevent stale editors and missing revision writes', asyn
   assert.equal(await h.db.prepare('SELECT count(*) n FROM catalog_audit').first('n'), 2);
 });
 
-test('dashboard projects only own non-draft collection and redacts undiscovered content and other identities', async (t) => {
+test('dashboard preserves own draft records while redacting draft content, undiscovered content and other identities', async (t) => {
   const h = await harness(t);
   const admin = await seedSession(h.db, { admin: true });
   const alice = await seedSession(h.db);
@@ -125,27 +125,35 @@ test('dashboard projects only own non-draft collection and redacts undiscovered 
   const hidden = await create(h, admin, { name: 'Unrevealed Secret', description: 'Unrevealed lore', number: 3 });
   const draft = await create(h, admin, { name: 'Draft Secret', status: 'draft', number: 4 });
   await create(h, admin, { name: 'Unowned Catalog Secret', number: 5 });
+  const unownedDraft = await create(h, admin, { name: 'Other Draft Secret', status: 'draft', number: 6 });
   await own(h, alice, ownRow.id, true, bob.id);
   await own(h, bob, bobRow.id);
   await own(h, alice, hidden.id, false);
   await own(h, alice, draft.id);
+  await own(h, bob, unownedDraft.id);
   const response = await h.fetch(`/api/dashboard?userId=${bob.id}&role=admin`, { headers: { ...alice.headers, 'X-User-Id': bob.id, 'X-Role': 'admin' } });
   assert.equal(response.status, 200);
   const snapshot = await response.json() as {
     schemaVersion: string; mode: string; profile: { id: string }; veilings: Array<{ id: string; name: string | null; lore: unknown[]; artwork: unknown[] }>;
-    ownerships: Array<{ userId: string }>; discoveries: Array<{ firstDiscovererId: string | null }>;
+    ownerships: Array<{ userId: string; veilingId: string }>; discoveries: Array<{ veilingId: string; firstDiscovererId: string | null }>;
   };
   assert.equal(snapshot.schemaVersion, '1');
   assert.equal(snapshot.mode, 'live');
   assert.equal(snapshot.profile.id, alice.id);
-  assert.deepEqual(snapshot.veilings.map((v) => v.id), [ownRow.id, hidden.id]);
+  assert.deepEqual(snapshot.veilings.map((v) => v.id), [ownRow.id, hidden.id, draft.id]);
   assert(snapshot.ownerships.every((o) => o.userId === alice.id));
+  assert.equal(snapshot.ownerships.length, 3);
+  assert(snapshot.ownerships.some((o) => o.veilingId === draft.id));
   assert(snapshot.discoveries.every((d) => d.firstDiscovererId === null));
+  assert(!snapshot.discoveries.some((d) => d.veilingId === draft.id));
   assert.deepEqual(snapshot.veilings.find((v) => v.id === hidden.id), {
     id: hidden.id, number: 3, name: null, type: null, origin: null, editionIds: [], artwork: [], lore: [], releaseDate: null, contentStatus: 'redacted',
   });
+  assert.deepEqual(snapshot.veilings.find((v) => v.id === draft.id), {
+    id: draft.id, number: null, name: null, type: null, origin: null, editionIds: [], artwork: [], lore: [], releaseDate: null, contentStatus: 'unavailable',
+  });
   const encoded = JSON.stringify(snapshot);
-  for (const secret of ['Bob Secret', 'Draft Secret', 'Unrevealed Secret', 'Unrevealed lore', 'Unowned Catalog Secret', bob.id]) assert(!encoded.includes(secret));
+  for (const secret of ['Bob Secret', 'Draft Secret', 'Unrevealed Secret', 'Unrevealed lore', 'Unowned Catalog Secret', unownedDraft.id, bob.id]) assert(!encoded.includes(secret));
   const empty = await (await h.fetch('/api/dashboard', { headers: admin.headers })).json() as { veilings: unknown[]; ownerships: unknown[] };
   assert.deepEqual(empty.veilings, []);
   assert.deepEqual(empty.ownerships, []);

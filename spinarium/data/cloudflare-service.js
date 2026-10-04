@@ -4,6 +4,7 @@
  */
 import { cloudflareConnection } from "../auth/cloudflare-auth.js";
 import { createAdminAccountService } from "./admin-account-service.js";
+import { validReleaseDate } from "../domain/showcase.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ARTWORK = /^\/api\/artwork\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,6 +30,7 @@ const MESSAGES = Object.freeze({
   NUMBER_IN_USE: "This character number is already in use. Choose another number.",
   ACCOUNT_CHANGED: "This account has changed. Review its current details and confirm the action again.",
   PROTECTED_ACCOUNT: "This account is protected from that action.",
+  PUBLICATION_REQUIRED: "This Veiling is private. Publish its saved draft first.",
 });
 export class SpinariumServiceError extends Error {
   constructor(code) {
@@ -52,6 +54,21 @@ function artworkUrl(value) {
   if (typeof value !== "string" || !ARTWORK.test(value)) throw new SpinariumServiceError("INVALID_PROJECTION");
   return value;
 }
+function showcaseRow(row) {
+  if (!row || !UUID.test(row.id) || typeof row.name !== "string" || !row.name || row.name.length > 120 ||
+    typeof row.description !== "string" || row.description.length > 20000 ||
+    (row.number !== null && (!Number.isSafeInteger(row.number) || row.number < 1 || row.number > 999999)) ||
+    !["public", "upcoming"].includes(row.visibility) ||
+    (row.releaseDate !== null && !validReleaseDate(row.releaseDate)) ||
+    (row.visibility === "public" && row.releaseDate !== null) ||
+    ["rarity", "edition"].some(field => row[field] !== null &&
+      (typeof row[field] !== "string" || !row[field] || row[field].length > (field === "rarity" ? 80 : 120))) ||
+    typeof row.updatedAt !== "string" || !Number.isFinite(Date.parse(row.updatedAt)))
+    throw new SpinariumServiceError("INVALID_PROJECTION");
+  return { id: row.id, name: row.name, number: row.number, description: row.description,
+    rarity: row.rarity, edition: row.edition, artworkUrl: artworkUrl(row.artworkUrl),
+    visibility: row.visibility, releaseDate: row.releaseDate, updatedAt: row.updatedAt };
+}
 function catalogRow(row) {
   if (!row || typeof row !== "object" || !UUID.test(row.id) ||
     typeof row.name !== "string" || !row.name || row.name.length > 120 ||
@@ -62,11 +79,20 @@ function catalogRow(row) {
     (row.rarity != null && (typeof row.rarity !== "string" || row.rarity.length > 80)) ||
     (row.edition != null && (typeof row.edition !== "string" || row.edition.length > 120)))
     throw new SpinariumServiceError("INVALID_PROJECTION");
+  let publication = null;
+  if (row.publication != null) {
+    publication = showcaseRow(row.publication);
+    if (publication.id !== row.id || !Number.isSafeInteger(row.publication.sourceRevision) ||
+      row.publication.sourceRevision < 1 || row.publication.sourceRevision > row.revision)
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    publication.sourceRevision = row.publication.sourceRevision;
+  }
   return {
     id: row.id, revision: row.revision, name: row.name, description: row.description,
     character_number: row.character_number ?? null, status: row.status,
     rarity: row.rarity ?? null, edition: row.edition ?? null,
     artworkUrl: artworkUrl(row.artworkUrl),
+    publication,
   };
 }
 
@@ -118,6 +144,7 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
         if (errorCode === "NUMBER_IN_USE") throw new SpinariumServiceError("NUMBER_IN_USE");
         if (errorCode === "ACCOUNT_CHANGED") throw new SpinariumServiceError("ACCOUNT_CHANGED");
         if (errorCode === "PROTECTED_ACCOUNT") throw new SpinariumServiceError("PROTECTED_ACCOUNT");
+        if (errorCode === "PUBLICATION_REQUIRED") throw new SpinariumServiceError("PUBLICATION_REQUIRED");
       }
       throw new SpinariumServiceError(failure[response.status] || "BACKEND_ERROR");
     }
@@ -154,16 +181,76 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
     for (const veiling of data.veilings) {
       if (!veiling || !UUID.test(veiling.id) || !ownedIds.has(veiling.id) || !Array.isArray(veiling.artwork))
         throw new SpinariumServiceError("INVALID_PROJECTION");
+      if (veiling.contentStatus === "unavailable" && (
+        ["number", "name", "type", "origin", "releaseDate"].some(field => veiling[field] !== null) ||
+        ["editionIds", "artwork", "lore"].some(field => !Array.isArray(veiling[field]) || veiling[field].length !== 0) ||
+        data.discoveries.some(discovery => discovery.veilingId === veiling.id)))
+        throw new SpinariumServiceError("INVALID_PROJECTION");
       for (const artwork of veiling.artwork) {
         if (!artwork || !artworkUrl(artwork.url)) throw new SpinariumServiceError("INVALID_PROJECTION");
       }
     }
     return data;
   }
+  async function getOwnershipDetail(recordId, { signal } = {}) {
+    const identity = captureIdentity();
+    if (typeof recordId !== "string" || !UUID.test(recordId)) throw new SpinariumServiceError("NOT_FOUND");
+    const id = recordId.toLowerCase();
+    const data = await request(`/ownerships/${id}`, { identity, signal });
+    const record = data?.ownership, veiling = data?.veiling;
+    if (data?.schemaVersion !== "1" || data.mode !== "live" ||
+      !record || record.id !== id || record.userId !== identity.user.id || !UUID.test(record.veilingId) ||
+      record.acquisition !== "server_grant" || record.physicalCardId !== null ||
+      typeof record.acquiredAt !== "string" || !Number.isFinite(Date.parse(record.acquiredAt)) ||
+      !veiling || veiling.id !== record.veilingId ||
+      (veiling.number !== null && (!Number.isSafeInteger(veiling.number) || veiling.number < 1 || veiling.number > 999999)) ||
+      !["published", "redacted", "unavailable"].includes(veiling.contentStatus) ||
+      (veiling.name !== null && (typeof veiling.name !== "string" || !veiling.name || veiling.name.length > 120)) ||
+      (veiling.description !== null && (typeof veiling.description !== "string" || veiling.description.length > 20000)) ||
+      (["redacted", "unavailable"].includes(veiling.contentStatus) && (veiling.name !== null || veiling.description !== null || veiling.artworkUrl !== null)) ||
+      (veiling.contentStatus === "unavailable" && veiling.number !== null))
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    // Return only the authenticated projection's documented fields.
+    return {
+      schemaVersion: "1", mode: "live",
+      ownership: { id, userId: record.userId, veilingId: record.veilingId,
+        acquisition: record.acquisition, acquiredAt: record.acquiredAt, physicalCardId: null },
+      veiling: { id: veiling.id, number: veiling.number, name: veiling.name,
+        description: veiling.description, artworkUrl: artworkUrl(veiling.artworkUrl), contentStatus: veiling.contentStatus },
+    };
+  }
   async function listAdminVeilings({ signal } = {}) {
     const rows = await request("/admin/veilings", { signal });
     if (!Array.isArray(rows)) throw new SpinariumServiceError("INVALID_PROJECTION");
     return rows.map(catalogRow);
+  }
+  async function getShowcase({ signal } = {}) {
+    const data = await request("/showcase", { signal });
+    if (data?.schemaVersion !== "1" || data.mode !== "live" || !Array.isArray(data.veilings))
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    const rows = data.veilings.map(showcaseRow);
+    if (new Set(rows.map(row => row.id)).size !== rows.length) throw new SpinariumServiceError("INVALID_PROJECTION");
+    return rows;
+  }
+  async function getShowcaseVeiling(id, { signal } = {}) {
+    const selected = requireId(id);
+    const data = await request(`/showcase/${selected}`, { signal });
+    if (data?.schemaVersion !== "1" || data.mode !== "live" || data.veiling?.id !== selected)
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    return showcaseRow(data.veiling);
+  }
+  async function publishVeiling({ id, revision, visibility, releaseDate = null, useSavedDraft, signal } = {}) {
+    const selected = requireId(id);
+    if (!Number.isSafeInteger(revision) || revision < 1) throw new SpinariumServiceError("REVISION_REQUIRED");
+    if (!["public", "upcoming", "private"].includes(visibility) || typeof useSavedDraft !== "boolean" ||
+      (releaseDate !== null && !validReleaseDate(releaseDate)) ||
+      (visibility !== "upcoming" && releaseDate !== null) || (visibility === "private" && useSavedDraft))
+      throw new SpinariumServiceError("INVALID_INPUT");
+    const saved = catalogRow(await request(`/admin/veilings/${selected}/publication`, {
+      method: "POST", revision, signal, body: { visibility, releaseDate, useSavedDraft },
+    }));
+    if (saved.id !== selected) throw new SpinariumServiceError("INVALID_PROJECTION");
+    return saved;
   }
   async function saveVeiling(input) {
     const identity = captureIdentity();
@@ -213,7 +300,8 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
   }
   return Object.freeze({
     configured: !connection.error,
-    getDashboard, getAdminAccess, getAdminContext, listAdminVeilings, saveVeiling, uploadArtwork,
+    getDashboard, getOwnershipDetail, getAdminAccess, getAdminContext, listAdminVeilings, saveVeiling, uploadArtwork,
+    getShowcase, getShowcaseVeiling, publishVeiling,
     ...createAdminAccountService({ request, ErrorClass: SpinariumServiceError, origin }),
     getCapabilities: () => ({ authentication: !connection.error, claims: false,
       transfers: false, notifications: false, threeDimensionalView: false }),

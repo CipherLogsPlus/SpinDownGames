@@ -1,5 +1,20 @@
 # Website and Spinarium verification
 
+## Member showcase and Veiling Studio — local update, 3 October 2026
+
+Implemented members-only approved content, private draft editing, explicit Public/Upcoming/hide controls, and optional informational dates. The 60-second film is cancelled; the banner entrance remains. New migration 0005 publishes no existing catalog rows and does not depend on the cancelled migration 0004. This update has not been deployed or migrated remotely.
+
+Completed local checks:
+
+- The Worker suite passed 77/77 before the final approved-number uniqueness and publication-input guards. After those guards, the final publication suite passed 11/11, including absent-publication rejection, atomic conflict/audit rollback, number reuse and current-session/role checks. Final TypeScript check and Worker build passed.
+- New showcase adapter/domain checks passed 15/15; Studio policy/image checks passed 7/7. The existing Cloudflare adapter passed 26 checks, account-administration adapter passed 24, ownership controller passed six, and domain/banner checks passed.
+- Focused showcase browser checks passed 11/11. They cover zero-ownership member access, private-draft absence, Upcoming dates including past dates, explicit publication previews, private edits, visibility moves, conflicts, failed uploads, logout races, keyboard operation, mobile layout and enlarged text.
+- The adapted baseline browser suite passed 71/71 and ownership browser regression passed 13/13 using local API fixtures (95 distinct browser checks including the showcase suite). Desktop and phone Studio/showcase screenshots were visually reviewed. Fictional fixtures and placeholder artwork are test data only, outside the served site.
+
+The enabled production package dry run passed without remote changes: 50 served assets plus `_headers`. The new showcase/Studio modules match source; the public allowlist excludes tests, backend code, migrations, dependencies and film media.
+
+Browser fixtures and local D1/R2 tests do not establish hosted authorization, storage availability or a completed production release. Hosted artwork uploads still require the R2 binding described in the deployment guide. Existing accounts, ownership, roles, sessions and audit must be preserved in a later release.
+
 ## Account-management production activation — 2 October 2026
 
 The owner authorized a protected account directory, disable/restore/session/recovery controls for regular administrators, and a single highest owner who can manage regular administrators. The owner designated their existing saved account; the trusted operator resolved its exact account ID and creation record privately and provisioned that exact active account through a guarded audited transaction. Final trusted reads reconfirmed the account is active, its authoritative and directory roles are owner, there is exactly one owner, and its grant has one audit event. All its existing sessions were revoked; a fresh sign-in is required for **Menu → Accounts**. The operator never signed in as the owner or inspected its credentials/session secrets, and no owner email or UUID is published here.

@@ -2,6 +2,8 @@ import { requireCsrf, requireSession, type AuthSession } from './auth';
 import { HttpError, json, readBytes, readJson } from './http';
 import type { Env } from './types';
 import { getAdminRole, handleAdminAccounts } from './admin-accounts';
+import { CATALOG_WITH_PUBLICATION, PUBLICATION_COLUMN, handleShowcase, publicationOf, publicationProjection,
+  publishPublication, type CatalogRow } from './showcase';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ARTWORK_BYTES = 8 * 1024 * 1024;
@@ -15,22 +17,6 @@ const AUDIT_JSON = `json_object(
   'number', character_number, 'status', status, 'rarity', rarity,
   'edition', edition, 'artworkId', artwork_id, 'revision', revision
 )`;
-
-interface CatalogRow {
-  id: string;
-  name: string;
-  description: string;
-  character_number: number | null;
-  status: 'draft' | 'active' | 'retired';
-  rarity: string | null;
-  edition: string | null;
-  artwork_id: string | null;
-  revision: number;
-  created_by: string;
-  updated_by: string;
-  created_at: number;
-  updated_at: number;
-}
 
 interface OwnershipRow {
   id: string;
@@ -107,6 +93,7 @@ function parseInput(value: unknown, existing?: CatalogRow): CatalogInput {
 }
 
 function adminProjection(row: CatalogRow) {
+  const publication = publicationOf(row);
   return {
     id: row.id,
     name: row.name,
@@ -119,6 +106,7 @@ function adminProjection(row: CatalogRow) {
     created_at: new Date(row.created_at * 1000).toISOString(),
     updated_at: new Date(row.updated_at * 1000).toISOString(),
     artworkUrl: row.artwork_id ? `/api/artwork/${row.artwork_id}` : null,
+    publication: publication ? { ...publicationProjection(publication), sourceRevision: publication.source_revision } : null,
   };
 }
 
@@ -131,7 +119,7 @@ function auditProjection(row: CatalogRow) {
 }
 
 async function catalogRow(env: Env, id: string): Promise<CatalogRow> {
-  const row = await env.DB.withSession('first-primary').prepare('SELECT * FROM catalog_veilings WHERE id = ?').bind(id).first<CatalogRow>();
+  const row = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id).first<CatalogRow>();
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'The Veiling was not found.');
   return row;
 }
@@ -148,14 +136,15 @@ async function dashboard(env: Env, session: AuthSession): Promise<Response> {
   // Every query binds the session's identity. No request identity, role, or
   // metadata grants visibility. Definitions are limited to this collection.
   const results = await db.batch<CatalogRow | OwnershipRow | DiscoveryRow>([
-    db.prepare(`SELECT v.* FROM catalog_veilings v
-      WHERE v.status != 'draft' AND EXISTS (
+    db.prepare(`${CATALOG_WITH_PUBLICATION}
+      WHERE EXISTS (
         SELECT 1 FROM ownerships o WHERE o.user_id = ? AND o.veiling_id = v.id
-      ) ORDER BY v.character_number, v.id`).bind(session.userId),
-    db.prepare(`SELECT o.* FROM ownerships o JOIN catalog_veilings v ON v.id = o.veiling_id
-      WHERE o.user_id = ? AND v.status != 'draft' ORDER BY o.acquired_at, o.id`).bind(session.userId),
+      ) ORDER BY p.veiling_id IS NULL AND v.status = 'draft',
+        CASE WHEN p.veiling_id IS NOT NULL THEN p.character_number WHEN v.status != 'draft' THEN v.character_number END, v.id`).bind(session.userId),
+    db.prepare(`SELECT o.* FROM ownerships o
+      WHERE o.user_id = ? ORDER BY o.acquired_at, o.id`).bind(session.userId),
     db.prepare(`SELECT d.* FROM discoveries d JOIN catalog_veilings v ON v.id = d.veiling_id
-      WHERE v.status != 'draft' AND EXISTS (
+      WHERE (v.status != 'draft' OR EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id)) AND EXISTS (
         SELECT 1 FROM ownerships o WHERE o.user_id = ? AND o.veiling_id = d.veiling_id
       )`).bind(session.userId),
   ]);
@@ -168,20 +157,25 @@ async function dashboard(env: Env, session: AuthSession): Promise<Response> {
     mode: 'live',
     profile: { id: session.userId, displayName: session.displayName, memberSince: session.memberSince, avatarSrc: null },
     veilings: veilings.map((row) => {
-      const revealed = discovered.get(row.id)?.status === 'revealed';
+      const publication = publicationOf(row);
+      const unavailable = !publication && row.status === 'draft';
+      const revealed = Boolean(publication) || !unavailable && discovered.get(row.id)?.status === 'revealed';
+      const name = publication ? publication.name : row.name;
+      const description = publication ? publication.description : row.description;
+      const artworkId = publication ? publication.artwork_id : row.artwork_id;
       return {
-        id: row.id, number: row.character_number,
-        name: revealed ? row.name : null, type: null, origin: null,
+        id: row.id, number: unavailable ? null : publication ? publication.character_number : row.character_number,
+        name: revealed ? name : null, type: null, origin: null,
         editionIds: [],
-        artwork: revealed && row.artwork_id ? [{
-          id: row.artwork_id, role: 'color_art', url: `/api/artwork/${row.artwork_id}`,
-          alt: row.name, variantId: null, status: 'approved',
+        artwork: revealed && artworkId ? [{
+          id: artworkId, role: 'color_art', url: `/api/artwork/${artworkId}`,
+          alt: name, variantId: null, status: 'approved',
         }] : [],
         lore: revealed ? [{
-          id: row.id, locale: 'en', title: row.name, preview: row.description,
-          text: row.description, status: 'published', version: row.revision,
+          id: row.id, locale: 'en', title: name, preview: description,
+          text: description, status: 'published', version: publication ? publication.source_revision : row.revision,
         }] : [],
-        releaseDate: null, contentStatus: revealed ? 'published' : 'redacted',
+        releaseDate: null, contentStatus: unavailable ? 'unavailable' : revealed ? 'published' : 'redacted',
       };
     }),
     ownerships: ownerships.map((row) => ({
@@ -197,6 +191,42 @@ async function dashboard(env: Env, session: AuthSession): Promise<Response> {
     })),
     series: [], editions: [], variants: [], rarities: [], physicalCards: [],
     achievements: [], userAchievements: [], collections: [], news: [], events: [],
+  });
+}
+
+async function ownershipDetail(env: Env, session: AuthSession, id: string): Promise<Response> {
+  const row = await env.DB.withSession('first-primary').prepare(`
+    SELECT o.id, o.user_id, o.veiling_id, o.acquisition, o.acquired_at,
+      v.character_number, v.name, v.description, v.artwork_id, v.status AS catalog_status,
+      d.status AS discovery_status, ${PUBLICATION_COLUMN}
+    FROM ownerships o JOIN catalog_veilings v ON v.id = o.veiling_id
+    LEFT JOIN veiling_publications p ON p.veiling_id=v.id
+    LEFT JOIN discoveries d ON d.veiling_id = v.id
+    WHERE o.id = ? AND o.user_id = ?
+  `).bind(id, session.userId).first<OwnershipRow & {
+    character_number: number | null; name: string; description: string;
+    artwork_id: string | null; discovery_status: DiscoveryRow['status'] | null; catalog_status: CatalogRow['status']; publication_json: string | null;
+  }>();
+  if (!row) throw new HttpError(404, 'NOT_FOUND', 'The ownership was not found.');
+  const publication = publicationOf(row);
+  const unavailable = !publication && row.catalog_status === 'draft';
+  const revealed = Boolean(publication) || !unavailable && row.discovery_status === 'revealed';
+  const artworkId = publication ? publication.artwork_id : row.artwork_id;
+  return json({
+    schemaVersion: '1',
+    mode: 'live',
+    ownership: {
+      id: row.id, userId: session.userId, veilingId: row.veiling_id,
+      acquisition: row.acquisition, acquiredAt: new Date(row.acquired_at * 1000).toISOString(),
+      physicalCardId: null,
+    },
+    veiling: {
+      id: row.veiling_id, number: unavailable ? null : publication ? publication.character_number : row.character_number,
+      name: revealed ? publication ? publication.name : row.name : null,
+      description: revealed ? publication ? publication.description : row.description : null,
+      artworkUrl: revealed && artworkId ? `/api/artwork/${artworkId}` : null,
+      contentStatus: unavailable ? 'unavailable' : revealed ? 'published' : 'redacted',
+    },
   });
 }
 
@@ -217,7 +247,7 @@ async function createVeiling(request: Request, env: Env, session: AuthSession): 
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
         SELECT ?, id, ?, 'create', NULL, ${AUDIT_JSON}, ? FROM catalog_veilings WHERE id = ? AND changes() = 1`)
         .bind(crypto.randomUUID(), session.userId, now, id),
-      db.prepare('SELECT * FROM catalog_veilings WHERE id = ?').bind(id),
+      db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id),
     ]);
   } catch (error) { catalogDatabaseError(error); }
   if (results![0].meta.changes !== 1) throw new HttpError(403, 'ADMIN_REQUIRED', 'Trusted administrator access is required.');
@@ -242,7 +272,7 @@ async function updateVeiling(request: Request, env: Env, session: AuthSession, i
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
         SELECT ?, id, ?, 'update', ?, ${AUDIT_JSON}, ? FROM catalog_veilings WHERE id = ? AND changes() = 1`)
         .bind(crypto.randomUUID(), session.userId, JSON.stringify(auditProjection(existing)), now, id),
-      db.prepare('SELECT * FROM catalog_veilings WHERE id = ?').bind(id),
+      db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id),
     ]);
   } catch (error) { catalogDatabaseError(error); }
   if (results![0].meta.changes !== 1) {
@@ -298,7 +328,7 @@ async function uploadArtwork(request: Request, env: Env, session: AuthSession, i
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
         SELECT ?, id, ?, 'artwork', ?, ${AUDIT_JSON}, ? FROM catalog_veilings WHERE id = ? AND changes() = 1`)
         .bind(crypto.randomUUID(), session.userId, JSON.stringify(auditProjection(existing)), now, id),
-      db.prepare('SELECT * FROM catalog_veilings WHERE id = ?').bind(id),
+      db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id),
     ]);
     if (results[1].meta.changes !== 1) {
       await requireAdmin(env, session);
@@ -315,8 +345,11 @@ async function uploadArtwork(request: Request, env: Env, session: AuthSession, i
 
 async function artwork(env: Env, session: AuthSession, id: string): Promise<Response> {
   const row = await env.DB.withSession('first-primary').prepare(`SELECT a.* FROM artwork a JOIN catalog_veilings v ON v.id = a.veiling_id
-    WHERE a.id = ? AND (${ADMIN_EXISTS} OR (
+    WHERE a.id = ? AND (${ADMIN_EXISTS} OR EXISTS(
+      SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id AND p.artwork_id=a.id
+    ) OR (
       v.status != 'draft' AND v.artwork_id = a.id
+      AND NOT EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id)
       AND EXISTS (SELECT 1 FROM discoveries d WHERE d.veiling_id = v.id AND d.status = 'revealed')
       AND EXISTS (
         SELECT 1 FROM ownerships o WHERE o.user_id = ? AND o.veiling_id = a.veiling_id
@@ -335,17 +368,25 @@ async function artwork(env: Env, session: AuthSession, id: string): Promise<Resp
 }
 
 export async function handleData(request: Request, env: Env): Promise<Response | null> {
+  const showcaseResponse = await handleShowcase(request, env);
+  if (showcaseResponse) return showcaseResponse;
   const accountResponse = await handleAdminAccounts(request, env);
   if (accountResponse) return accountResponse;
   const path = new URL(request.url).pathname;
-  const veilingMatch = path.match(/^\/api\/admin\/veilings\/([^/]+)(\/artwork)?$/);
+  const veilingMatch = path.match(/^\/api\/admin\/veilings\/([^/]+)(\/artwork|\/publication)?$/);
   const artworkMatch = path.match(/^\/api\/artwork\/([^/]+)$/);
-  const isKnown = ['/api/dashboard', '/api/admin/access', '/api/admin/veilings'].includes(path) || veilingMatch || artworkMatch;
+  const ownershipMatch = path.match(/^\/api\/ownerships\/([^/]*)$/);
+  const isKnown = ['/api/dashboard', '/api/admin/access', '/api/admin/veilings'].includes(path) || veilingMatch || artworkMatch || ownershipMatch;
   if (!isKnown) return null;
   const session = await requireSession(request, env);
   if (path === '/api/dashboard') {
     if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET for this endpoint.');
     return dashboard(env, session);
+  }
+  if (ownershipMatch) {
+    if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET for this endpoint.');
+    if (!UUID.test(ownershipMatch[1])) throw new HttpError(404, 'NOT_FOUND', 'The ownership was not found.');
+    return ownershipDetail(env, session, ownershipMatch[1].toLowerCase());
   }
   if (path === '/api/admin/access') {
     if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET for this endpoint.');
@@ -360,7 +401,7 @@ export async function handleData(request: Request, env: Env): Promise<Response |
   await requireAdmin(env, session);
   if (path === '/api/admin/veilings') {
     if (request.method === 'GET') {
-      const rows = await env.DB.withSession('first-primary').prepare('SELECT * FROM catalog_veilings ORDER BY character_number IS NULL, character_number, created_at DESC, id LIMIT 200').all<CatalogRow>();
+      const rows = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} ORDER BY v.character_number IS NULL, v.character_number, v.created_at DESC, v.id LIMIT 200`).all<CatalogRow>();
       return json(rows.results.map(adminProjection));
     }
     if (request.method === 'POST') return createVeiling(request, env, session);
@@ -368,6 +409,10 @@ export async function handleData(request: Request, env: Env): Promise<Response |
   }
   const id = veilingMatch![1].toLowerCase();
   if (!UUID.test(id)) invalidInput('Select a valid Veiling.');
+  if (veilingMatch![2] === '/publication') {
+    if (request.method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
+    return json(adminProjection(await publishPublication(request, env, session, id)));
+  }
   if (veilingMatch![2]) {
     if (request.method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
     return uploadArtwork(request, env, session, id);

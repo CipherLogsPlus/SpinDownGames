@@ -29,7 +29,7 @@ export async function createHarness(overrides: Partial<Env> = {}, outbound?: (re
   const env = await mf.getBindings<Env>();
   const db = env.DB;
   const r2 = env.ARTWORK;
-  for (const file of ["0001_foundation.sql", "0002_password_accounts.sql", "0003_account_management.sql"]) {
+  for (const file of ["0001_foundation.sql", "0002_password_accounts.sql", "0003_account_management.sql", "0005_member_showcase.sql"]) {
     const migration = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
     const statements = migration.split(/;\s*(?:\n|$)/).filter((statement) => statement.trim());
     for (const statement of statements) await db.prepare(statement).run();

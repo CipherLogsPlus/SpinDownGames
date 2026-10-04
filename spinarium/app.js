@@ -5,9 +5,12 @@ import { createPreviewAccess } from "./data/preview-service.js";
 import { createFirstLoginIntro } from "./components/first-login-intro.js";
 import { createDashboardReveal } from "./components/dashboard-reveal.js";
 import { createAdminAccountsController } from "./components/admin-accounts.js";
+import { createOwnershipRecordController } from "./components/ownership-record.js";
+import { createMemberShowcase } from "./components/member-showcase.js";
+import { createVeilingStudio } from "./components/veiling-studio.js";
 import { renderHomeHub } from "./components/home-hub.js";
 import { parseRoute } from "./domain/routing.js";
-import { getVeilingDetail, queryCollection } from "./domain/collection.js";
+import { getVeilingDetail, queryCollection, withUnavailableVeiling } from "./domain/collection.js";
 import { hydrateIcons } from "./components/icons.js";
 import {
   el,
@@ -68,9 +71,36 @@ const state = {
 };
 const authRoutes = new Set(["signin", "signup", "reset", "update-password", "reset-password"]);
 let authMode = "signin";
-let adminRows = [];
-let adminSaving = false;
-let adminRevision = null;
+function protectedReturnRoute(hash) {
+  const parsed = parseRoute(hash);
+  const id = parsed.name === "ownership" ? parsed.ownershipId : parsed.name === "showcase" ? parsed.veilingId : null;
+  return id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    ? "#" + parsed.name + "/" + id.toLowerCase() : null;
+}
+let pendingProtectedRoute = protectedReturnRoute(location.hash);
+const collectionReads = new Set();
+const ownershipRecords = createOwnershipRecordController({
+  root: $("#route-content"), service, getSession: () => auth.getSession(),
+  onLoaded(detail) {
+    if (detail.veiling.contentStatus !== "unavailable" || !state.snapshot) return;
+    for (const invalidations of collectionReads) invalidations.add(detail.veiling.id);
+    state.snapshot = withUnavailableVeiling(state.snapshot, detail.veiling.id);
+    // Refresh hidden collection views too, so returning cannot revive old content.
+    $("#full-detail-content").replaceChildren();
+    updateCollection();
+    $("#stats").replaceChildren(renderStats(state.snapshot));
+    $("#dashboard-footer").replaceChildren(renderFooter(state.snapshot));
+    $("#hub-view").replaceChildren(renderHomeHub(state.snapshot));
+  },
+});
+const memberShowcase = createMemberShowcase({
+  root: $("#route-content"), service, getSession: () => auth.getSession(),
+  getOwnedIds: () => new Set(state.snapshot?.ownerships.filter(record => record.userId === state.session?.user.id).map(record => record.veilingId) || []),
+});
+const veilingStudio = createVeilingStudio({
+  root: $("#veiling-studio-content"), service, getSession: () => auth.getSession(),
+  onChanged() { memberShowcase.reset(); void loadCollection(); },
+});
 const accounts = createAdminAccountsController({
   root: $("#admin-accounts-content"), service,
   onAccessLost() {
@@ -184,6 +214,10 @@ function setAuthMode(mode) {
 }
 function clearPrivateViews() {
   accounts.reset();
+  ownershipRecords.reset();
+  memberShowcase.reset();
+  veilingStudio.reset();
+  collectionReads.clear();
   firstLoginIntro.reset();
   state.snapshot = null;
   state.selectedId = null;
@@ -195,10 +229,6 @@ function clearPrivateViews() {
   $("#collection-search").value = "";
   $("#catalog-search").value = "";
   $("#collection-sort").value = "number";
-  adminRows = [];
-  adminRevision = null;
-  $("#admin-form").reset();
-  $("#admin-list").replaceChildren();
   for (const id of [
     "stats",
     "collection-grid",
@@ -281,6 +311,8 @@ function updateCollection() {
   );
   $("#collection-status").textContent = entries.length
     ? entries.length + " Veilings in this view"
+    : state.query.search.trim()
+      ? "No Veilings match your search."
     : state.query.filter === "owned"
       ? "Your collection is empty. No Veilings have been added."
       : "No Veilings to show in this view yet.";
@@ -307,15 +339,19 @@ function showCollectionError() {
 async function loadCollection() {
   if (!state.session || state.session.flow === "recovery") return;
   const epoch = state.epoch;
+  const unavailableSinceStart = new Set();
+  collectionReads.add(unavailableSinceStart);
   $("#loading-status").hidden = false;
   $("#loading-status").className = "";
   $("#loading-status").textContent = "Opening your collection…";
   try {
-    const [snapshot, adminContext] = await Promise.all([
+    let [snapshot, adminContext] = await Promise.all([
       service.getDashboard(),
       service.getAdminContext ? service.getAdminContext() : Promise.resolve({ admin: false, role: null }),
     ]);
     if (epoch !== state.epoch || !auth.getSession()) return;
+    // A newer record response also invalidates older dashboard reads in flight.
+    for (const id of unavailableSinceStart) snapshot = withUnavailableVeiling(snapshot, id);
     state.snapshot = snapshot;
     state.admin = adminContext.admin === true;
     state.adminRole = state.admin ? adminContext.role : null;
@@ -332,10 +368,13 @@ async function loadCollection() {
     route();
 
   } catch {
-    if (epoch === state.epoch && auth.getSession()) showCollectionError();
+    if (epoch === state.epoch && auth.getSession() && !state.snapshot) showCollectionError();
+  } finally {
+    collectionReads.delete(unavailableSinceStart);
   }
 }
 async function handleSession(session) {
+  if (state.session && (!session || session.user.id !== state.session.user.id)) pendingProtectedRoute = null;
   const epoch = ++state.epoch;
   state.session = session;
   clearPrivateViews();
@@ -373,13 +412,18 @@ async function handleSession(session) {
   if (preview) $("#collection-notice").textContent = "Static preview · No real account, ownership, or backend actions are connected.";
   navigationSize();
   if (authRoutes.has(location.hash.slice(1)) || !location.hash)
-    history.replaceState(null, "", "#dashboard");
+    history.replaceState(null, "", pendingProtectedRoute || "#dashboard");
+  pendingProtectedRoute = null;
   loadCollection();
 }
 function route() {
   const parsed = parseRoute(location.hash, Boolean(state.session));
   const requested = parsed.name;
+  if (requested !== "ownership" || !state.session || resetLanding) ownershipRecords.reset();
+  if (!["explore", "upcoming", "showcase"].includes(requested) || !state.session || resetLanding) memberShowcase.reset();
+  if (requested !== "admin" || !state.session || resetLanding) veilingStudio.reset();
   if (requested === "reset-password") {
+    pendingProtectedRoute = null;
     resetLanding = true;
     accounts.reset();
     resetView();
@@ -408,6 +452,7 @@ function route() {
   }
   $("#password-reset-view").hidden = true;
   if (!state.session || state.session.flow === "recovery") {
+    if (["ownership", "showcase"].includes(requested) && !state.session) pendingProtectedRoute = protectedReturnRoute(location.hash);
     signedOutView();
     setAuthMode(
       state.session?.flow === "recovery" ? "update-password" : requested,
@@ -424,7 +469,7 @@ function route() {
     requested === "main-content" || authRoutes.has(requested)
       ? "dashboard"
       : requested;
-  const collectionPage = name === "collection" || name === "explore";
+  const collectionPage = name === "collection";
   document.body.classList.toggle("hub-route", name === "dashboard");
   $(".hero").hidden = name !== "dashboard";
   $("#hub-view").hidden = name !== "dashboard";
@@ -451,7 +496,7 @@ function route() {
   if (name === "settings") $("#signed-in-account-id").value = state.session.user.id;
   if (name !== "accounts") accounts.reset();
   document.querySelectorAll("[data-nav]").forEach((link) => {
-    if (link.dataset.nav === name || (link.dataset.nav === "explore" && name === "upcoming")) link.setAttribute("aria-current", "page");
+    if (link.dataset.nav === name || (link.dataset.nav === "explore" && ["upcoming", "showcase"].includes(name))) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
   if (name === "accounts") {
@@ -465,9 +510,16 @@ function route() {
       title.id = "route-title";
       $("#route-content").replaceChildren(title, el("p", "", "Your account is not authorized to view or manage accounts."));
     }
+  } else if (name === "ownership") {
+    const detailDialog = $("#veiling-dialog");
+    detailDialog._returnFocus = null;
+    if (detailDialog.open) detailDialog.close();
+    void ownershipRecords.open({ id: parsed.ownershipId, identity: state.session });
+  } else if (["explore", "upcoming", "showcase"].includes(name)) {
+    void memberShowcase.open({ identity: state.session, id: name === "showcase" ? parsed.veilingId : null, upcoming: name === "upcoming", unowned: parsed.filter === "unowned" });
   } else if (name === "admin") {
     if (state.admin) {
-      loadAdmin();
+      void veilingStudio.open({ identity: state.session });
       document.title = "Veiling Studio · Spinarium — SpinDownGames™";
     } else {
       $("#route-view").hidden = false;
@@ -486,7 +538,7 @@ function route() {
     $("#route-content").replaceChildren(
       renderRoute(name, state.snapshot, state.capabilities),
     );
-  if (name !== "admin" && name !== "accounts") document.title = "Spinarium — SpinDownGames™";
+  if (name !== "admin" && name !== "accounts") document.title = (name === "ownership" ? "Ownership record · " : "") + "Spinarium — SpinDownGames™";
   closeNavigation();
 }
 function openDialog(dialog, trigger) {
@@ -545,6 +597,7 @@ $("#auth-form").addEventListener("submit", async (event) => {
   }
 });
 async function signOut() {
+  pendingProtectedRoute = null;
   try {
     await auth.signOut();
     feedback("You have signed out.");
@@ -673,140 +726,13 @@ document.addEventListener("keydown", (event) => {
 });
 mobile.addEventListener("change", navigationSize);
 window.addEventListener("hashchange", () => {
+  if (!["ownership", "showcase", "signin", "signup"].includes(parseRoute(location.hash).name)) pendingProtectedRoute = null;
   captureResetLink();
   feedback("");
   route();
   if (state.session && state.snapshot) $("#main-content").focus({ preventScroll: true });
 });
 
-function renderAdminList(rows) {
-  const fragment = document.createDocumentFragment();
-  if (!rows.length)
-    fragment.append(el("p", "", "No Veilings have been added yet."));
-  for (const row of rows) {
-    const button = el("button", "admin-catalog-item");
-    button.type = "button";
-    button.disabled = adminSaving;
-    if (row.artworkUrl) {
-      const thumbnail = el("img", "admin-artwork-thumbnail");
-      thumbnail.src = row.artworkUrl;
-      thumbnail.alt = "Artwork for " + row.name;
-      thumbnail.width = 60;
-      thumbnail.height = 80;
-      thumbnail.loading = "lazy";
-      button.append(thumbnail);
-    }
-    button.append(
-      el("strong", "", row.name),
-      el("span", "", row.status + " · " + (row.edition || "No edition")),
-    );
-    button.addEventListener("click", () => {
-      if (adminSaving) return;
-      $("#admin-id").value = row.id;
-      adminRevision = row.revision ?? null;
-      $("#admin-name").value = row.name;
-      $("#admin-description").value = row.description;
-      $("#admin-number").value = row.character_number ?? "";
-      $("#admin-status").value = row.status;
-      $("#admin-rarity").value = row.rarity ?? "";
-      $("#admin-edition").value = row.edition ?? "";
-      $("#admin-artwork").value = "";
-      $("#admin-name").focus();
-    });
-    fragment.append(button);
-  }
-  $("#admin-list").replaceChildren(fragment);
-}
-async function loadAdmin() {
-  if (!state.admin) return;
-  const epoch = state.epoch;
-  $("#admin-list").replaceChildren(el("p", "", "Opening catalog…"));
-  try {
-    const rows = await service.listAdminVeilings();
-    if (epoch !== state.epoch || !state.admin) return;
-    adminRows = rows;
-    renderAdminList(rows);
-  } catch {
-    if (epoch === state.epoch)
-      $("#admin-list").replaceChildren(
-        el("p", "", "The catalog could not be loaded. Please try again."),
-      );
-  }
-}
-$("#admin-new").addEventListener("click", () => {
-  if (adminSaving) return;
-  $("#admin-form").reset();
-  $("#admin-id").value = "";
-  adminRevision = null;
-  $("#admin-feedback").textContent = "";
-  $("#admin-name").focus();
-});
-function setAdminBusy(busy) {
-  adminSaving = busy;
-  for (const control of $("#admin-form").querySelectorAll("input, textarea, select, button"))
-    control.disabled = busy;
-  for (const button of $("#admin-list").querySelectorAll("button")) button.disabled = busy;
-}
-$("#admin-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (!state.admin || adminSaving) return;
-  const epoch = state.epoch;
-  const file = $("#admin-artwork").files[0] || null;
-  if (
-    file &&
-    (!["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
-      file.size > 8 * 1024 * 1024)
-  ) {
-    $("#admin-feedback").textContent =
-      "Choose a PNG, JPEG, or WebP image no larger than 8 MB.";
-    return;
-  }
-  setAdminBusy(true);
-  $("#admin-feedback").textContent = "Saving…";
-  let saved = null;
-  try {
-    const input = {
-      id: $("#admin-id").value || undefined,
-      revision: adminRevision,
-      name: $("#admin-name").value,
-      description: $("#admin-description").value,
-      number: $("#admin-number").value
-        ? Number($("#admin-number").value)
-        : null,
-      status: $("#admin-status").value,
-      rarity: $("#admin-rarity").value || null,
-      edition: $("#admin-edition").value || null,
-    };
-    saved = await service.saveVeiling(input);
-    if (epoch !== state.epoch) return;
-    $("#admin-id").value = saved.id;
-    adminRevision = saved.revision;
-    if (file) {
-      const uploaded = await service.uploadArtwork({ veilingId: saved.id, file, revision: saved.revision });
-      if (epoch !== state.epoch) return;
-      adminRevision = uploaded.revision;
-    }
-    if (epoch !== state.epoch) return;
-    $("#admin-feedback").textContent =
-      "Veiling saved. No collector ownership has been changed.";
-    $("#admin-artwork").value = "";
-    await loadAdmin();
-  } catch (error) {
-    if (epoch === state.epoch) {
-      const stale = error?.code === "STALE_REVISION" || error?.code === "REVISION_REQUIRED";
-      $("#admin-feedback").textContent = stale
-        ? "This Veiling changed or needs to be reloaded. Select its current catalog entry before saving again."
-        : error?.code === "NUMBER_IN_USE"
-        ? "This character number is already in use. Choose another number."
-        : saved
-        ? "The description was saved, but artwork could not be attached. Please retry the upload."
-        : "The Veiling could not be saved. No changes have been confirmed.";
-      if (stale) await loadAdmin();
-    }
-  } finally {
-    setAdminBusy(false);
-  }
-});
 auth.onAuthStateChange(handleSession);
 signedOutView();
 setAuthMode(location.hash.slice(1));
