@@ -10,6 +10,8 @@ import { createMemberShowcase } from "./components/member-showcase.js";
 import { createVeilingStudio } from "./components/veiling-studio.js";
 import { renderHomeHub } from "./components/home-hub.js";
 import { parseRoute } from "./domain/routing.js";
+import { createGuardedNavigation } from "./components/guarded-navigation.js";
+import { createLatestLoader } from "./components/latest-loader.js";
 import { getVeilingDetail, queryCollection, withUnavailableVeiling } from "./domain/collection.js";
 import { hydrateIcons } from "./components/icons.js";
 import {
@@ -28,6 +30,7 @@ let resetLanding = false;
 let resetComplete = false;
 let resetBusy = false;
 let resetRequest = null;
+let navigation = null;
 function captureResetLink() {
   if (!location.hash.startsWith("#reset-password=")) return;
   resetRequest?.abort();
@@ -39,7 +42,8 @@ function captureResetLink() {
   resetComplete = false;
   const match = /^#reset-password=([A-Za-z0-9_-]{43})$/.exec(location.hash);
   resetToken = match?.[1] || null;
-  history.replaceState(null, "", location.pathname + location.search + "#reset-password");
+  if (navigation) navigation.replace("#reset-password");
+  else history.replaceState(null, "", location.pathname + location.search + "#reset-password");
 }
 captureResetLink();
 
@@ -65,6 +69,7 @@ const state = {
   selectedId: null,
   admin: false,
   adminRole: null,
+  adminAvailability: "loading",
   authBusy: false,
   epoch: 0,
   query: { search: "", filter: "owned", sort: "number" },
@@ -218,6 +223,10 @@ function clearPrivateViews() {
   memberShowcase.reset();
   veilingStudio.reset();
   collectionReads.clear();
+  collectionLoader.reset();
+  adminLoader.reset();
+  state.adminAvailability = "loading";
+  $("#admin-access-status").hidden = true;
   firstLoginIntro.reset();
   state.snapshot = null;
   state.selectedId = null;
@@ -313,66 +322,89 @@ function updateCollection() {
     ? entries.length + " Veilings in this view"
     : state.query.search.trim()
       ? "No Veilings match your search."
-    : state.query.filter === "owned"
-      ? "Your collection is empty. No Veilings have been added."
-      : "No Veilings to show in this view yet.";
-  $("#collection-filter").value = state.query.filter;
+      : "Your collection is empty. No Veilings have been added.";
   updateSelection();
 }
 function showCollectionError() {
-  $("#dashboard-view").hidden = true;
-  $("#route-view").hidden = true;
+  if (!state.snapshot) {
+    $("#dashboard-view").hidden = true;
+    $("#route-view").hidden = true;
+  }
   $("#loading-status").hidden = false;
   $("#loading-status").className = "error-message";
   const retry = el("button", "outlined-button", "Try again");
   retry.type = "button";
   retry.addEventListener("click", loadCollection);
   $("#loading-status").replaceChildren(
-    el(
-      "p",
-      "",
-      "Your account is signed in. The collection service is not available yet. No sample collection has been substituted.",
-    ),
+    el("p", "", state.snapshot
+      ? "We couldn’t refresh your collection. The last loaded collection is still shown. Try again to get the latest changes."
+      : "Your account is signed in. The collection service is not available yet. No sample collection has been substituted."),
     retry,
   );
 }
-async function loadCollection() {
-  if (!state.session || state.session.flow === "recovery") return;
-  const epoch = state.epoch;
-  const unavailableSinceStart = new Set();
-  collectionReads.add(unavailableSinceStart);
-  $("#loading-status").hidden = false;
-  $("#loading-status").className = "";
-  $("#loading-status").textContent = "Opening your collection…";
-  try {
-    let [snapshot, adminContext] = await Promise.all([
-      service.getDashboard(),
-      service.getAdminContext ? service.getAdminContext() : Promise.resolve({ admin: false, role: null }),
-    ]);
-    if (epoch !== state.epoch || !auth.getSession()) return;
-    // A newer record response also invalidates older dashboard reads in flight.
-    for (const id of unavailableSinceStart) snapshot = withUnavailableVeiling(snapshot, id);
+const readIdentity = () => state.session && state.session.flow !== "recovery" && auth.getSession() === state.session ? state.session : null;
+const collectionLoader = createLatestLoader({
+  getIdentity: readIdentity,
+  onStart() {
+    $("#loading-status").hidden = false;
+    $("#loading-status").className = "";
+    $("#loading-status").textContent = state.snapshot ? "Refreshing your collection…" : "Opening your collection…";
+  },
+  async read({ signal }) {
+    const unavailableSinceStart = new Set();
+    collectionReads.add(unavailableSinceStart);
+    signal.addEventListener("abort", () => collectionReads.delete(unavailableSinceStart), { once: true });
+    try {
+      let snapshot = await service.getDashboard({ signal });
+      // A newer record response also invalidates older dashboard reads in flight.
+      for (const id of unavailableSinceStart) snapshot = withUnavailableVeiling(snapshot, id);
+      return snapshot;
+    } finally { collectionReads.delete(unavailableSinceStart); }
+  },
+  onSuccess(snapshot) {
     state.snapshot = snapshot;
-    state.admin = adminContext.admin === true;
-    state.adminRole = state.admin ? adminContext.role : null;
     state.capabilities = service.getCapabilities();
-    state.selectedId = null;
     $("#stats").replaceChildren(renderStats(snapshot));
     $("#dashboard-footer").replaceChildren(renderFooter(snapshot));
     $("#hub-view").replaceChildren(renderHomeHub(snapshot));
     updateCollection();
-    updateSelection();
-    $("#admin-nav").hidden = !state.admin;
-    $("#admin-accounts-nav").hidden = !state.admin;
     $("#loading-status").hidden = true;
     route();
-
-  } catch {
-    if (epoch === state.epoch && auth.getSession() && !state.snapshot) showCollectionError();
-  } finally {
-    collectionReads.delete(unavailableSinceStart);
+  },
+  onError: showCollectionError,
+});
+function showAdminAvailability() {
+  $("#admin-nav").hidden = !state.admin;
+  $("#admin-accounts-nav").hidden = !state.admin;
+  const status = $("#admin-access-status");
+  status.hidden = state.adminAvailability !== "unavailable";
+  status.replaceChildren();
+  if (!status.hidden) {
+    const retry = el("button", "outlined-button", "Retry admin access");
+    retry.type = "button";
+    retry.addEventListener("click", () => void adminLoader.load());
+    status.append(el("p", "", "Admin tools could not be checked. Your personal collection is still available."), retry);
   }
+  if (state.snapshot) route();
 }
+const adminLoader = createLatestLoader({
+  getIdentity: readIdentity,
+  onStart() { state.adminAvailability = "loading"; showAdminAvailability(); },
+  read: ({ signal }) => service.getAdminContext ? service.getAdminContext({ signal }) : Promise.resolve({ admin: false, role: null }),
+  onSuccess(context) {
+    state.admin = context.admin === true;
+    state.adminRole = state.admin ? context.role : null;
+    state.adminAvailability = "ready";
+    showAdminAvailability();
+  },
+  onError() {
+    state.admin = false;
+    state.adminRole = null;
+    state.adminAvailability = "unavailable";
+    showAdminAvailability();
+  },
+});
+function loadCollection() { return collectionLoader.load(); }
 async function handleSession(session) {
   if (state.session && (!session || session.user.id !== state.session.user.id)) pendingProtectedRoute = null;
   const epoch = ++state.epoch;
@@ -386,13 +418,13 @@ async function handleSession(session) {
     signedOutView();
     setAuthMode("signin");
     if (!authRoutes.has(location.hash.slice(1)))
-      history.replaceState(null, "", "#signin");
+      navigation.replace("#signin");
     return;
   }
   if (session.flow === "recovery") {
     signedOutView();
     setAuthMode("update-password");
-    history.replaceState(null, "", "#update-password");
+    navigation.replace("#update-password");
     return;
   }
   if (firstLoginIntro.show()) {
@@ -412,12 +444,13 @@ async function handleSession(session) {
   if (preview) $("#collection-notice").textContent = "Static preview · No real account, ownership, or backend actions are connected.";
   navigationSize();
   if (authRoutes.has(location.hash.slice(1)) || !location.hash)
-    history.replaceState(null, "", pendingProtectedRoute || "#dashboard");
+    navigation.replace(pendingProtectedRoute || "#dashboard");
   pendingProtectedRoute = null;
-  loadCollection();
+  void adminLoader.load();
+  void loadCollection();
 }
 function route() {
-  const parsed = parseRoute(location.hash, Boolean(state.session));
+  const parsed = parseRoute(navigation.hash, Boolean(state.session));
   const requested = parsed.name;
   if (requested !== "ownership" || !state.session || resetLanding) ownershipRecords.reset();
   if (!["explore", "upcoming", "showcase"].includes(requested) || !state.session || resetLanding) memberShowcase.reset();
@@ -457,18 +490,15 @@ function route() {
     setAuthMode(
       state.session?.flow === "recovery" ? "update-password" : requested,
     );
-    if (!authRoutes.has(requested) && requested !== "main-content")
-      history.replaceState(null, "", "#signin");
+    if (!authRoutes.has(requested))
+      navigation.replace("#signin");
     return;
   }
   if (!state.snapshot) {
-    loadCollection();
+    if (!collectionLoader.loading) void loadCollection();
     return;
   }
-  const name =
-    requested === "main-content" || authRoutes.has(requested)
-      ? "dashboard"
-      : requested;
+  const name = authRoutes.has(requested) ? "dashboard" : requested;
   const collectionPage = name === "collection";
   document.body.classList.toggle("hub-route", name === "dashboard");
   $(".hero").hidden = name !== "dashboard";
@@ -484,7 +514,7 @@ function route() {
     else link.removeAttribute("aria-current");
   }
   if (collectionPage) {
-    state.query.filter = parsed.filter;
+    state.query.filter = "owned";
     $("#collection-page-title").textContent = name === "explore" ? "Explore Veilings" : "My Collection";
     updateCollection();
   }
@@ -506,9 +536,9 @@ function route() {
     } else {
       accounts.reset();
       $("#route-view").hidden = false;
-      const title = el("h2", "", "Admin access required");
+      const title = el("h2", "", state.adminAvailability === "ready" ? "Admin access required" : "Checking admin access");
       title.id = "route-title";
-      $("#route-content").replaceChildren(title, el("p", "", "Your account is not authorized to view or manage accounts."));
+      $("#route-content").replaceChildren(title, el("p", "", state.adminAvailability === "ready" ? "Your account is not authorized to view or manage accounts." : "Admin tools are unavailable until your access can be verified."));
     }
   } else if (name === "ownership") {
     const detailDialog = $("#veiling-dialog");
@@ -522,15 +552,17 @@ function route() {
       void veilingStudio.open({ identity: state.session });
       document.title = "Veiling Studio · Spinarium — SpinDownGames™";
     } else {
+      // Capability loss is an authorization boundary, not a voluntary leave.
+      veilingStudio.reset();
       $("#route-view").hidden = false;
-      const title = el("h2", "", "Admin access required");
+      const title = el("h2", "", state.adminAvailability === "ready" ? "Admin access required" : "Checking admin access");
       title.id = "route-title";
       $("#route-content").replaceChildren(
         title,
         el(
           "p",
           "",
-          "Your account is not authorized to manage Veiling content.",
+          state.adminAvailability === "ready" ? "Your account is not authorized to manage Veiling content." : "Admin tools are unavailable until your access can be verified.",
         ),
       );
     }
@@ -607,8 +639,15 @@ async function signOut() {
     );
   }
 }
-$("#sign-out").addEventListener("click", signOut);
-$("#menu-sign-out").addEventListener("click", signOut);
+let signOutPending = false;
+async function requestSignOut() {
+  if (signOutPending) return;
+  signOutPending = true;
+  try { await navigation.confirm(signOut); }
+  finally { signOutPending = false; }
+}
+$("#sign-out").addEventListener("click", requestSignOut);
+$("#menu-sign-out").addEventListener("click", requestSignOut);
 $("#copy-account-id").addEventListener("click", async () => {
   const accountId = state.session?.user.id;
   if (!accountId) return;
@@ -679,11 +718,6 @@ $("#collection-sort").addEventListener("change", (event) => {
   state.query.sort = event.currentTarget.value;
   updateCollection();
 });
-$("#collection-filter").addEventListener("change", (event) => {
-  if (!state.snapshot) return;
-  const name = parseRoute(location.hash, true).name === "explore" ? "explore" : "collection";
-  location.hash = name + "?filter=" + event.currentTarget.value;
-});
 $("#catalog-search-form").addEventListener("submit", (event) => {
   event.preventDefault();
   if (!state.snapshot) return;
@@ -725,12 +759,38 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeNavigation(true);
 });
 mobile.addEventListener("change", navigationSize);
-window.addEventListener("hashchange", () => {
-  if (!["ownership", "showcase", "signin", "signup"].includes(parseRoute(location.hash).name)) pendingProtectedRoute = null;
-  captureResetLink();
-  feedback("");
-  route();
-  if (state.session && state.snapshot) $("#main-content").focus({ preventScroll: true });
+navigation = createGuardedNavigation({
+  window,
+  canLeave: veilingStudio.canLeave,
+  onStay: veilingStudio.cancelLeave,
+  onRoute() {
+    if (!["ownership", "showcase", "signin", "signup"].includes(parseRoute(navigation.hash).name)) pendingProtectedRoute = null;
+    captureResetLink();
+    feedback("");
+    route();
+    if (state.session && state.snapshot) $("#main-content").focus({ preventScroll: true });
+  },
+});
+$(".skip-link").addEventListener("click", event => {
+  event.preventDefault();
+  $("#main-content").focus({ preventScroll: true });
+  $("#main-content").scrollIntoView({ block: "start" });
+});
+// Same-tab links outside the hash router get the same save/discard choice.
+// New tabs leave this document and its draft intact.
+document.addEventListener("click", event => {
+  const link = event.target.closest("a[href]");
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
+      !link || link.hasAttribute("download") || (link.target && link.target !== "_self") || !veilingStudio.hasPendingChanges()) return;
+  const target = new URL(link.href, location.href);
+  if (target.origin === location.origin && target.pathname === location.pathname && target.search === location.search) return;
+  event.preventDefault();
+  void navigation.confirm(() => location.assign(target.href));
+});
+window.addEventListener("beforeunload", event => {
+  if (!veilingStudio.hasPendingChanges()) return;
+  event.preventDefault();
+  event.returnValue = "";
 });
 
 auth.onAuthStateChange(handleSession);

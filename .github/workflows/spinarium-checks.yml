@@ -5,14 +5,28 @@ on:
     paths:
       - "spinarium/**"
       - "cloudflare/**"
-      - "scripts/verify-spinarium*"
+      - "assets/**"
+      - "*.html"
+      - "*.css"
+      - "*.js"
+      - "package*.json"
+      - "CNAME"
+      - ".nojekyll"
+      - "scripts/**"
       - ".github/workflows/spinarium-checks.yml"
   push:
     branches: [main]
     paths:
       - "spinarium/**"
       - "cloudflare/**"
-      - "scripts/verify-spinarium*"
+      - "assets/**"
+      - "*.html"
+      - "*.css"
+      - "*.js"
+      - "package*.json"
+      - "CNAME"
+      - ".nojekyll"
+      - "scripts/**"
       - ".github/workflows/spinarium-checks.yml"
 
 permissions:
@@ -38,10 +52,11 @@ jobs:
       - run: npm run types && git diff --exit-code -- worker-configuration.d.ts
       - run: npm run check
       - run: npm test
+      - run: npm run test:assets
       - run: npm run dry-run
       - run: npm run dry-run:staging
       - run: npm run dry-run:production
-      - name: Browser adapter and collection contracts
+      - name: Adapter, domain and controller contracts
         run: |
           node ../../scripts/verify-spinarium-cloudflare.mjs
           node ../../scripts/verify-spinarium-account-admin-adapter.mjs
@@ -50,3 +65,53 @@ jobs:
           node ../../scripts/verify-spinarium-showcase.mjs
           node ../../scripts/verify-spinarium-studio.mjs
           node ../../scripts/verify-spinarium-intro.mjs
+          node ../../scripts/verify-spinarium-navigation.mjs
+          node ../../scripts/verify-spinarium-loading.mjs
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - verify.cjs
+          - verify-spinarium.cjs
+          - verify-spinarium-ownership-browser.cjs
+          - verify-spinarium-showcase-browser.cjs
+    env:
+      BASE_URL: http://127.0.0.1:8000
+      SCREENSHOT_DIR: test-results/screenshots
+      # The original-site baseline is immutable; never replace it with HEAD.
+      PRESERVATION_REF: a7e1dadfb49e5a6f2acd4dd1dd5af97226a25b76
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require the original preservation baseline
+        run: git cat-file -e "$PRESERVATION_REF^{commit}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Install Chromium and its system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run local browser and accessibility checks
+        shell: bash
+        run: |
+          mkdir -p test-results
+          python3 -m http.server 8000 --bind 127.0.0.1 >test-results/static-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 "$BASE_URL/" >/dev/null
+          kill -0 "$server_pid"
+          node "scripts/${{ matrix.suite }}" 2>&1 | tee test-results/browser.log
+      - name: Retain browser logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-${{ matrix.suite }}
+          path: test-results/
+          if-no-files-found: ignore

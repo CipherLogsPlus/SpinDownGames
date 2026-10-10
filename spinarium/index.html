@@ -48,11 +48,11 @@
         <form id="catalog-search-form" class="catalog-search" role="search">
           <label class="search-box"
             ><span data-icon="search"></span
-            ><span class="sr-only">Search Veilings</span
+            ><span class="sr-only">Search my collection</span
             ><input
               id="catalog-search"
               type="search"
-              placeholder="Search Veilings…"
+              placeholder="Search my collection…"
               maxlength="100"
               autocomplete="off"
           /></label>
@@ -267,6 +267,7 @@
         <div id="loading-status" role="status" hidden>
           Opening your collection…
         </div>
+        <div id="admin-access-status" role="status" hidden></div>
         <section id="hub-view" class="home-hub" aria-labelledby="hub-title" hidden></section>
         <nav id="explore-tabs" class="explore-tabs" aria-label="Explore Veilings" hidden>
           <a href="#explore?filter=discovered">Revealed</a>
@@ -292,15 +293,6 @@
             >
               <h2 id="collection-title" class="sr-only">Veiling collection</h2>
               <div class="collection-toolbar">
-                <label class="sort-box">Show
-                  <select id="collection-filter">
-                    <option value="all">All Veilings</option>
-                    <option value="owned">Owned</option>
-                    <option value="discovered">Discovered</option>
-                    <option value="unowned">Uncollected</option>
-                    <option value="undiscovered">Undiscovered</option>
-                  </select>
-                </label>
                 <div class="collection-tools">
                   <label class="search-box"
                     ><span data-icon="search"></span

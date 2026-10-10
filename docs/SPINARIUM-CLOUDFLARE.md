@@ -65,7 +65,9 @@ Apply the checked migration to staging first and verify saved accounts still sig
 
 ## Local and hosted verification
 
-From the Worker package, `npm ci`, `npm run types`, `npm run check`, `npm test`, `npm run db:migrate:local` and `npm run dry-run` prepare and check local code. The default configuration remains local-only. Local migration/dry-run commands do not provision or activate hosted accounts. Use the dedicated staging configuration with actual resources for remote work.
+From the Worker package, `npm ci`, `npm run types`, `npm run check`, `npm test`, `npm run test:assets`, `npm run db:migrate:local` and `npm run dry-run` prepare and check local code. `test:assets` runs the documented staging and production packaging commands, compares their generated frontend switches with the corresponding backend configurations, checks the real authentication adapter is configured consistently, and verifies private/test files stay excluded. The default configuration remains local-only. Local migration/dry-run commands do not provision or activate hosted accounts. Use the dedicated staging configuration with actual resources for remote work.
+
+`npm run prepare:staging` enables `/api` and signup with preview disabled, matching the already-enabled password backend in `wrangler.staging.jsonc`. `npm run dry-run:staging` generates that package before validating the staging Worker. The low-level asset script still fails closed when called without enable switches; do not use that disabled package with the enabled staging configuration. If account availability changes, update the backend and public packaging switches together and rerun `test:assets`.
 
 The staging and production migrations are applied; verify the current ledger before further changes and never replay the original schema blindly. Verify hosted hashing, signup, saved profile/credential rows, empty ownership, login failure, reload persistence, logout/expiry, origin/CSRF denial, rate limits and administrator/collector separation. Keep request bodies, passwords, cookies and account secrets out of ordinary logs.
 
@@ -96,11 +98,12 @@ cd cloudflare/spinarium-worker
 npm ci
 npm run check
 npm test
+npm run test:assets
 npm run prepare:production
 npm run dry-run:production
 ```
 
-`prepare:production` runs `node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled`. It generates `.production-assets` with preview disabled, `/api` enabled, signup enabled and no credentials. The allowlist excludes backend source, migrations, documentation, dependencies, legacy/demo adapters and Git metadata. The deployed account-management package contains 45 served files plus `_headers`, extending the original 43-file login package. The production configuration enables password/auth/signup and uses the production D1 ID and apex route. Generating or dry-running it makes no hosted changes.
+`prepare:production` runs `node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled`. It generates `.production-assets` with preview disabled, `/api` enabled, signup enabled and no credentials. The allowlist excludes backend source, migrations, documentation, dependencies, legacy/demo adapters and Git metadata. The earlier account-management release contained 45 served files plus `_headers`, extending the original 43-file login package; later releases add modules. Use the packaging command's reported `files` total (which includes `_headers`) for the current checkout. The production configuration enables password/auth/signup and uses the production D1 ID and apex route. Generating or dry-running it makes no hosted changes.
 
 `dry-run:production` prepares those assets and runs `wrangler deploy --config wrangler.production.jsonc --dry-run`. It passed locally and is included in CI; it does not change hosted resources. To deploy a verified update through an authenticated CLI, check `npx wrangler whoami`, then use `npx wrangler deploy --config wrangler.production.jsonc`. This session deployed through the authenticated connector; its authorization does not authenticate Wrangler. Never deploy the default local configuration to production, and inspect migration state before applying any pending remote migration.
 

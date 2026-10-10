@@ -436,17 +436,18 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
       await assertNoBrowserCredentials(preview);
       assertNoDemoRequests(observedPreview.requests);
     });
-    await test("empty preview search, filters, and sorting do not invent records", async () => {
+    await test("empty preview search and sorting do not invent records or offer impossible filters", async () => {
       await preview.locator("#collection-search").fill("no such card");
       await assertBlankCards(preview, "#collection-grid", 10);
       await preview.locator("#collection-search").fill("");
-      for (const filter of ["all", "owned", "discovered", "unowned", "undiscovered"]) {
-        await preview.locator("#collection-filter").selectOption(filter);
-        await preview.waitForFunction((value) => location.hash.includes(`filter=${value}`), filter);
+      assert.equal(await preview.locator("#collection-filter").count(), 0);
+      assert.equal(await preview.locator("#catalog-search").getAttribute("placeholder"), "Search my collection…");
+      for (const filter of ["all", "unowned", "discovered", "undiscovered"]) {
+        await preview.evaluate(value => { location.hash = `collection?filter=${value}`; }, filter);
+        await preview.waitForFunction(() => !document.querySelector("#dashboard-view").hidden);
         await assertBlankCards(preview, "#collection-grid", 10);
       }
       for (const sort of ["number", "name", "rarity", "release"]) await preview.locator("#collection-sort").selectOption(sort);
-      await preview.locator("#collection-filter").selectOption("owned");
       await preview.locator("#collection-sort").selectOption("number");
     });
     await test("registration remains disabled, cannot accept a claim, and cannot change ownership", async () => {

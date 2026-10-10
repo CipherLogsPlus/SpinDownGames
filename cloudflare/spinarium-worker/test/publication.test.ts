@@ -267,3 +267,120 @@ test('transactional publication guard rejects session revocation, account disabl
     assert.equal(await h.db.prepare('SELECT revision FROM catalog_veilings WHERE id=?').bind(row.id).first('revision'), kind === 'revision' ? 2 : 1);
   });
 });
+
+test('hidden publications never restore draft text or artwork through legacy ownership fallback', async t => {
+  const h = await harness(t);
+  const admin = await seedSession(h.db, { admin: true });
+  const owner = await seedSession(h.db); const stranger = await seedSession(h.db);
+  let number = 1000;
+  for (const status of ['active', 'draft', 'retired'] as const) {
+    for (const discovery of [null, 'undiscovered', 'revealed'] as const) {
+      for (const pending of ['text', 'artwork', 'both'] as const) await t.test(`${status}/${discovery}/${pending}`, async () => {
+        const approvedNumber = number++;
+        let row = await upload(h, admin, await create(h, admin, { status, number: approvedNumber }));
+        const originalArt = row.artworkUrl!;
+        const ownershipId = crypto.randomUUID();
+        await h.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?,?)')
+          .bind(ownershipId, owner.id, row.id, 'server_grant', 1700000000).run();
+        if (discovery) await h.db.prepare('INSERT INTO discoveries(veiling_id,status) VALUES(?,?)').bind(row.id, discovery).run();
+        const owned = async () => {
+          const response = await h.fetch(`/api/ownerships/${ownershipId}`, { headers: owner.headers });
+          assert.equal(response.status, 200);
+          return response.json() as Promise<{ ownership: Record<string, unknown>; veiling: {
+            id: string; name: string | null; description: string | null; artworkUrl: string | null; number: number | null; contentStatus: string;
+          } }>;
+        };
+        const dashboard = async () => {
+          const response = await h.fetch('/api/dashboard', { headers: owner.headers });
+          assert.equal(response.status, 200);
+          return response.json() as Promise<{ ownerships: Array<{ id: string }>; veilings: Array<{
+            id: string; number: number | null; name: string | null; artwork: unknown[]; lore: unknown[]; contentStatus: string;
+          }>; discoveries: Array<{ veilingId: string }> }>;
+        };
+        // Genuine, never-publication-managed legacy rows keep their semantics.
+        const legacy = await owned();
+        const legacyRevealed = status !== 'draft' && discovery === 'revealed';
+        assert.equal(legacy.veiling.contentStatus, status === 'draft' ? 'unavailable' : legacyRevealed ? 'published' : 'redacted');
+        assert.equal(legacy.veiling.name, legacyRevealed ? 'Approved name' : null);
+        assert.equal((await h.fetch(originalArt, { headers: owner.headers })).status, legacyRevealed ? 200 : 404);
+        assert.equal((await h.fetch(originalArt, { headers: stranger.headers })).status, 404);
+
+        row = await publish(h, admin, row, pending === 'artwork' ? 'upcoming' : 'public');
+        const approved = await owned();
+        assert.equal(approved.veiling.name, 'Approved name');
+        assert.equal(approved.veiling.artworkUrl, originalArt);
+        if (pending !== 'artwork') row = await edit(h, admin, row, {
+          name: `Unapproved secret ${approvedNumber}`, description: `Unapproved lore ${approvedNumber}`, number: number++,
+        });
+        if (pending !== 'text') row = await upload(h, admin, row);
+        const workingArt = row.artworkUrl!;
+        assert.deepEqual(await owned(), approved, 'pending content is never substituted for the approved snapshot');
+        for (const session of [owner, stranger]) {
+          assert.equal((await h.fetch(originalArt, { headers: session.headers })).status, 200);
+          if (workingArt !== originalArt) assert.equal((await h.fetch(workingArt, { headers: session.headers })).status, 404);
+        }
+        const discoveryBefore = await h.db.prepare('SELECT * FROM discoveries WHERE veiling_id=?').bind(row.id).first();
+        row = await publish(h, admin, row, 'private', false);
+        const assertHidden = async () => {
+          const hidden = await owned();
+          assert.deepEqual(hidden.ownership, approved.ownership, 'the owned instance and acquisition metadata survive hiding');
+          assert.deepEqual(hidden.veiling, { id: row.id, name: null, description: null, artworkUrl: null, number: null, contentStatus: 'unavailable' });
+          const snapshot = await dashboard();
+          const projection = snapshot.veilings.find(item => item.id === row.id)!;
+          assert.equal(projection.contentStatus, 'unavailable'); assert.equal(projection.number, null); assert.equal(projection.name, null);
+          assert.deepEqual(projection.artwork, []); assert.deepEqual(projection.lore, []);
+          assert(snapshot.ownerships.some(item => item.id === ownershipId));
+          assert(!snapshot.discoveries.some(item => item.veilingId === row.id));
+          assert(!JSON.stringify([hidden, projection]).includes('Unapproved'));
+          for (const session of [owner, stranger]) {
+            assert.equal((await h.fetch(`/api/showcase/${row.id}`, { headers: session.headers })).status, 404);
+            for (const path of new Set([originalArt, workingArt])) assert.equal((await h.fetch(path, { headers: session.headers })).status, 404);
+          }
+        };
+        await assertHidden();
+        assert.equal((await h.fetch(`/api/ownerships/${ownershipId}`, { headers: stranger.headers })).status, 404);
+        const foreign = await (await h.fetch('/api/dashboard', { headers: stranger.headers })).json() as { veilings: unknown[]; ownerships: unknown[]; discoveries: unknown[] };
+        assert.deepEqual(foreign.veilings, []); assert.deepEqual(foreign.ownerships, []); assert.deepEqual(foreign.discoveries, []);
+        for (const path of new Set([originalArt, workingArt])) {
+          assert.equal((await h.fetch(path, { headers: admin.headers })).status, 200, 'administrator artwork access is preserved');
+          assert.equal((await h.fetch(path)).status, 401);
+        }
+        assert.deepEqual(await h.db.prepare('SELECT * FROM discoveries WHERE veiling_id=?').bind(row.id).first(), discoveryBefore);
+        // Catalog status changes after hiding cannot silently republish content.
+        row = await edit(h, admin, row, { status: status === 'active' ? 'retired' : 'active' });
+        await assertHidden();
+        const noApproval = await h.fetch(`/api/admin/veilings/${row.id}/publication`, write(admin,
+          { visibility: 'public', releaseDate: null, useSavedDraft: false }, row.revision));
+        assert.equal(noApproval.status, 409);
+        row = await publish(h, admin, row, 'public', true);
+        const republished = await owned();
+        assert.equal(republished.veiling.name, row.name);
+        assert.equal(republished.veiling.artworkUrl, workingArt);
+        assert.equal(republished.veiling.contentStatus, 'published');
+        assert.deepEqual(republished.ownership, approved.ownership);
+      });
+    }
+  }
+});
+
+test('historical hide audit protects existing rows without migrating or changing legacy data', async t => {
+  const h = await harness(t); const admin = await seedSession(h.db, { admin: true }); const owner = await seedSession(h.db);
+  const row = await upload(h, admin, await create(h, admin, { status: 'active', name: 'Historical unapproved secret' }));
+  const ownershipId = crypto.randomUUID();
+  await h.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?,?)').bind(ownershipId, owner.id, row.id, 'server_grant', 1700000000).run();
+  await h.db.prepare('INSERT INTO discoveries(veiling_id,status) VALUES(?,?)').bind(row.id, 'revealed').run();
+  // This is the persisted state left by the pre-fix hide implementation: no
+  // publication row, an immutable old audit marker, and a non-draft catalog.
+  await h.db.prepare(`INSERT INTO publication_audit
+    (id,veiling_id,actor_user_id,action,before_json,after_json,catalog_revision,created_at)
+    VALUES(?,?,?,'hide',?,NULL,?,1700000000)`)
+    .bind(crypto.randomUUID(), row.id, admin.id, JSON.stringify({ name: 'Old approved snapshot' }), row.revision).run();
+  const before = await h.db.prepare('SELECT * FROM catalog_veilings WHERE id=?').bind(row.id).first();
+  const detail = await (await h.fetch(`/api/ownerships/${ownershipId}`, { headers: owner.headers })).json() as { veiling: { name: null; contentStatus: string } };
+  assert.equal(detail.veiling.name, null); assert.equal(detail.veiling.contentStatus, 'unavailable');
+  const snapshot = await (await h.fetch('/api/dashboard', { headers: owner.headers })).json() as { discoveries: unknown[] };
+  assert(!JSON.stringify(snapshot).includes('Historical unapproved secret')); assert.deepEqual(snapshot.discoveries, []);
+  assert.equal((await h.fetch(row.artworkUrl!, { headers: owner.headers })).status, 404);
+  assert.deepEqual(await h.db.prepare('SELECT * FROM catalog_veilings WHERE id=?').bind(row.id).first(), before);
+  assert.equal(await h.db.prepare('SELECT count(*) n FROM publication_audit WHERE veiling_id=?').bind(row.id).first('n'), 1);
+});

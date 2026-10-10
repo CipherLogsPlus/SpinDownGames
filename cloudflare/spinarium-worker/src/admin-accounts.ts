@@ -2,16 +2,11 @@ import { requireCsrf, requireSession, type AuthSession } from './auth';
 import { epoch, hashToken, token } from './session';
 import { HttpError, json, readJson } from './http';
 import type { Env } from './types';
+import { ADMIN_ACTOR_GUARD as ACTOR_GUARD, OWNER_ACTOR_GUARD as OWNER_GUARD, adminActorValues as guardValues } from './admin-authorization';
 
 type Role = 'owner' | 'admin' | 'collector';
 type ActorRole = Exclude<Role, 'collector'>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTOR_GUARD = `EXISTS (SELECT 1 FROM admin_allowlist actor
-  JOIN users actor_user ON actor_user.id = actor.user_id
-  JOIN sessions actor_session ON actor_session.user_id = actor.user_id
-  WHERE actor.user_id = ? AND actor_user.disabled = 0
-  AND actor_session.token_hash = ? AND actor_session.expires_at > ?)`;
-const OWNER_GUARD = ACTOR_GUARD.replace('actor.user_id = ?', "actor.role = 'owner' AND actor.user_id = ?");
 const SELECT_ACCOUNT = `SELECT u.id, u.display_name, u.disabled, u.created_at, u.updated_at,
   u.last_login_at, u.account_revision, u.account_email AS email,
   COALESCE(a.role, 'collector') AS role,
@@ -75,9 +70,6 @@ export async function getAdminRole(env: Env, userId: string): Promise<ActorRole 
   const row = await env.DB.withSession('first-primary').prepare(`SELECT a.role FROM admin_allowlist a
     JOIN users u ON u.id = a.user_id WHERE a.user_id = ? AND u.disabled = 0`).bind(userId).first<{ role: ActorRole }>();
   return row?.role ?? null;
-}
-function guardValues(session: AuthSession): [string, string, number] {
-  return [session.userId, session.sessionTokenHash, epoch()];
 }
 async function authorizedRead<T>(db: D1DatabaseSession, session: AuthSession, statement: D1PreparedStatement): Promise<T[]> {
   // Authorization and result share one primary transaction. A role/session

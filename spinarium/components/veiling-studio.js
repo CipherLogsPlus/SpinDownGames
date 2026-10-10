@@ -99,6 +99,7 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
 
   function reset() {
     const previous = current;
+    cancelLeave();
     current = null;
     readSequence++;
     readRequest?.abort();
@@ -117,6 +118,78 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
   }
   function dirty(state) {
     return Boolean(state.ui.file?.files?.length) || Boolean(state.ui.fields && JSON.stringify(values(state)) !== JSON.stringify(draftFields(state.selected)));
+  }
+  function hasPendingChanges() {
+    return Boolean(current && active(current) && (dirty(current) || current.busy));
+  }
+  function cancelLeave() {
+    current?.leave?.finish(false);
+  }
+  function canLeave() {
+    const state = current;
+    if (!state || !active(state)) return Promise.resolve(true);
+    if (state.leave) return state.leave.promise;
+    if (state.busy) {
+      announce(state, "Wait for the current save to finish before leaving the Studio.", true);
+      return Promise.resolve(false);
+    }
+    if (!dirty(state)) return Promise.resolve(true);
+    const trigger = document.activeElement;
+    const dialog = el("dialog", "modal studio-publish-dialog");
+    dialog.id = "studio-leave-dialog";
+    dialog.setAttribute("aria-labelledby", "studio-leave-title");
+    const title = el("h3", "", "Save your draft before leaving?"); title.id = "studio-leave-title";
+    const status = feedback("studio-leave-feedback");
+    const actions = el("div", "studio-preview-actions");
+    const keep = button("Keep editing", "studio-leave-keep");
+    const discard = button("Discard changes", "studio-leave-discard");
+    const saveButton = button("Save draft and leave", "studio-leave-save", "outlined-button studio-primary");
+    saveButton.disabled = state.conflict;
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    const finish = allowed => {
+      if (state.leave?.dialog !== dialog) return;
+      state.leave = null;
+      dialog.close(); dialog.remove();
+      if (!allowed && active(state)) {
+        const focus = trigger?.isConnected && !trigger.closest("[hidden]") ? trigger : state.ui.fields?.name;
+        focus?.focus({ preventScroll: true });
+      }
+      resolve(allowed);
+    };
+    state.leave = { promise, finish, dialog };
+    keep.addEventListener("click", () => finish(false));
+    discard.addEventListener("click", () => {
+      if (state.busy) return;
+      select(state, state.selected, true);
+      finish(true);
+    });
+    saveButton.addEventListener("click", async () => {
+      if (!state.ui.form.checkValidity()) {
+        status.textContent = "Keep editing and complete the draft fields before saving.";
+        keep.focus();
+        return;
+      }
+      keep.disabled = discard.disabled = saveButton.disabled = true;
+      status.textContent = "Saving draft…";
+      const saved = await save(state);
+      if (state.leave?.dialog !== dialog) return;
+      if (saved) finish(true);
+      else {
+        status.textContent = state.ui.editorFeedback?.textContent || "Your draft could not be saved. Keep editing or discard the changes.";
+        keep.disabled = discard.disabled = false;
+        saveButton.disabled = state.conflict;
+        keep.focus();
+      }
+    });
+    dialog.addEventListener("cancel", event => { event.preventDefault(); if (!state.busy) finish(false); });
+    dialog.addEventListener("keydown", event => { if (event.key === "Escape") event.stopPropagation(); });
+    actions.append(keep, discard, saveButton);
+    dialog.append(title, el("p", "studio-preview-note", "Your unsaved text and selected artwork will be lost if you discard them. Saving keeps a private draft and does not publish it."), status, actions);
+    root.append(dialog);
+    dialog.showModal();
+    keep.focus();
+    return promise;
   }
   function notify(row) {
     try { Promise.resolve(onChanged(row)).catch(() => {}); } catch { /* Saved state is already confirmed. */ }
@@ -312,9 +385,9 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     updateControls(state);
   }
   async function save(state) {
-    if (!active(state) || state.busy || state.loading || state.conflict || !state.ui.form.reportValidity()) return;
+    if (!active(state) || state.busy || state.loading || state.conflict || !state.ui.form.reportValidity()) return false;
     const input = values(state), file = state.ui.file.files?.[0] || null;
-    if (!input.name) { announce(state, "Enter a Veiling name.", true); state.ui.fields.name.focus(); return; }
+    if (!input.name) { announce(state, "Enter a Veiling name.", true); state.ui.fields.name.focus(); return false; }
     state.busy = true; updateControls(state); announce(state, "Saving draft…");
     let saved = null;
     try {
@@ -332,6 +405,7 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
       renderEditor(state);
       announce(state, saved.publication ? "Draft saved. Members still see the version you last published." : "Draft saved. It is not visible to members.");
       notify(saved);
+      return true;
     } catch (error) {
       if (!active(state)) return;
       state.conflict = ["STALE_REVISION", "REVISION_REQUIRED", "PUBLICATION_REQUIRED"].includes(error?.code);
@@ -341,6 +415,7 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
           : "Draft saved, but artwork was not uploaded. Your selected file is still pending. Save Draft to retry, or clear the selected artwork.", true);
         notify(saved);
       } else announce(state, error?.code ? errorText(error) : error?.message?.startsWith("Choose ") || error?.message?.startsWith("The selected file") ? error.message : errorText(error), true);
+      return false;
     } finally {
       if (active(state)) { state.busy = false; renderList(state); updateControls(state); }
     }
@@ -499,5 +574,5 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     state.ready = load(state);
     return state.ready;
   }
-  return Object.freeze({ open, reset });
+  return Object.freeze({ open, reset, canLeave, cancelLeave, hasPendingChanges });
 }
