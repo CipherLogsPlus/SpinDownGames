@@ -675,7 +675,7 @@ async function publish(page, state, action, expected, expectedName) {
         assert.equal(await page.locator("#collection-filter").count(), 0);
         assert.equal(await page.locator("#catalog-search").getAttribute("placeholder"), "Search my collection…");
         await page.locator("#loading-status button").click();
-        await page.waitForSelector("#loading-status[hidden]");
+        await page.waitForSelector("#loading-status", { state: "hidden" });
         assert(await page.locator("#dashboard-view").isVisible());
       });
     });

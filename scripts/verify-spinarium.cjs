@@ -1129,7 +1129,10 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
       await fixture.page.locator("#password-reset-password").fill(fixturePassword);
       await fixture.page.locator("#password-reset-confirm").fill(fixturePassword);
       await fixture.page.locator("#password-reset-submit").click();
-      await fixture.page.waitForFunction(() => document.querySelector("#password-reset-feedback").textContent.trim());
+      // A nonempty status also matches "Saving your new password…". Wait for
+      // the terminal generic error before checking completion cleanup.
+      await fixture.page.waitForFunction(() => document.querySelector("#password-reset-fields").disabled &&
+        /invalid|expired/i.test(document.querySelector("#password-reset-feedback").textContent));
       assert.doesNotMatch(await fixture.page.locator("#password-reset-feedback").innerText(), /Private|token or account/);
       assert.equal(await fixture.page.locator("#password-reset-password").inputValue(), "");
       assert.equal(await fixture.page.locator("#password-reset-confirm").inputValue(), "");

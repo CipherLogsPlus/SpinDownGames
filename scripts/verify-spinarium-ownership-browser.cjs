@@ -86,7 +86,7 @@ async function waitForSignal(promise) {
   try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Timed out waiting for an intercepted record request.")), 10000); })]); }
   finally { clearTimeout(timer); }
 }
-async function fixture(browser, { hash = "collection?filter=owned", width = 1280, signedIn = true, missingArtwork = false, publishedArtworkVeiling = null, dashboardHolds = [] } = {}) {
+async function fixture(browser, { hash = "collection?filter=owned", width = 1280, signedIn = true, missingArtwork = false, publishedArtworkVeiling = null, dashboardHolds = [], draftRefresh = false } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: "reduce" });
   try {
   const state = { signedIn, unavailableVeilings: new Set(), failures: new Map(), held: new Map(), dashboardHolds, dashboardReads: 0, requests: [], errors: [], fixtureErrors: [] };
@@ -129,7 +129,20 @@ async function fixture(browser, { hash = "collection?filter=owned", width = 1280
       try { return await respond(projection); }
       finally { hold?.markFinished(); }
     }
-    if (url.pathname === "/api/admin/access" && request.method() === "GET") return respond({ admin: false, role: null });
+    if (url.pathname === "/api/admin/access" && request.method() === "GET") return respond({ admin: draftRefresh, role: draftRefresh ? "admin" : null });
+    // This one fixture uses an actual private-draft save to trigger the app's
+    // collection refresh. The save never grants or mutates ownership records.
+    if (draftRefresh && url.pathname === "/api/admin/veilings") {
+      if (request.method() === "GET") return respond([]);
+      if (request.method() === "POST") {
+        assert.equal(headers["x-csrf-token"], fixtureCsrf);
+        const input = request.postDataJSON();
+        assert.deepEqual(input, { name: "Read invalidation fixture", description: "", number: null,
+          status: "draft", rarity: null, edition: null });
+        return respond({ id: id("f", 1), name: input.name, description: input.description, character_number: input.number,
+          status: input.status, rarity: input.rarity, edition: input.edition, artworkUrl: null, revision: 1, publication: null }, 201);
+      }
+    }
     if (missingArtwork && url.pathname === `/api/artwork/${id("e", 1)}` && request.method() === "GET")
       return respond({ code: "NOT_FOUND" }, 404);
     if (publishedArtworkVeiling && url.pathname === `/api/artwork/${id("e", 1)}` && request.method() === "GET") {
@@ -181,12 +194,15 @@ async function withFixture(browser, options, run) {
     assert.deepEqual(current.state.fixtureErrors, [], "Unexpected API fixture behavior.");
     assert(current.state.requests.every((request) => !request.authorization), "Browser read requests must not carry bearer tokens.");
     assert(current.state.requests.every((request) => !request.url.includes(fixtureCookie) && !request.url.includes(fixtureCsrf)), "Credentials must not appear in URLs.");
-    assert(current.state.requests.every((request) => request.method === "GET" || ["/api/auth/login", "/api/auth/logout"].includes(request.path)), "Ownership browsing must not mutate records.");
+    assert(current.state.requests.every((request) => request.method === "GET" || ["/api/auth/login", "/api/auth/logout"].includes(request.path) ||
+      (options.draftRefresh === true && request.method === "POST" && request.path === "/api/admin/veilings")), "Ownership browsing must not mutate records.");
+    if (options.draftRefresh) assert.equal(current.state.requests.filter(request => request.method === "POST" && request.path === "/api/admin/veilings").length, 1,
+      "The refresh fixture must save exactly one private draft and must never grant ownership.");
     assert.deepEqual(await current.page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie })),
       { local: { [introKey]: "seen" }, session: {}, cookie: "" }, "Only the baseline presentation preference may be browser-readable; private identity and ownership must not be stored there.");
   } finally {
     for (const held of current.state.held.values()) held.release();
-    for (const held of current.state.dashboardHolds) held.release();
+    for (const held of current.state.dashboardHolds) held?.release();
     await current.context.close();
   }
 }
@@ -346,13 +362,25 @@ async function test(name, run) {
       }));
     await test("an older dashboard response cannot restore details hidden by a newer ownership response", async () => {
       const first = deferredRecord(), second = deferredRecord();
-      await withFixture(browser, { hash: "dashboard", dashboardHolds: [first, second], publishedArtworkVeiling: veilings[1].id }, async ({ page, state }) => {
+      await withFixture(browser, { hash: "dashboard", dashboardHolds: [first, second], publishedArtworkVeiling: veilings[1].id, draftRefresh: true }, async ({ page, state }) => {
         const record = records[2], veiling = veilings[1];
         await waitForSignal(first.requested);
         await navigate(page, "collection?filter=owned");
-        await waitForSignal(second.requested);
         first.release();
         await waitForSignal(first.finished);
+        await waitCollection(page);
+        assert.equal(state.dashboardReads, 1, "Navigation must reuse an initial read instead of creating duplicate dashboard requests.");
+        // Saving a real Studio draft starts a fresh dashboard read while the
+        // existing collection remains available. Hold its pre-hide projection.
+        await navigate(page, "admin");
+        await page.waitForSelector("#studio-create:not([disabled])");
+        await page.locator("#studio-create").click();
+        await page.locator("#studio-name").fill("Read invalidation fixture");
+        await page.locator("#studio-save").click();
+        await waitForSignal(second.requested);
+        await page.waitForFunction(() => document.querySelector("#studio-editor-feedback")?.textContent.startsWith("Draft saved.") &&
+          document.querySelector("#studio-save")?.disabled === false);
+        await navigate(page, "collection?filter=owned");
         await waitCollection(page);
         await page.locator(`[data-card-id="${veiling.id}"]`).click();
         assert((await page.locator("#detail-panel").innerText()).includes(veiling.name));
@@ -366,7 +394,7 @@ async function test(name, run) {
         await waitForSignal(second.finished);
         await (await lateResponse).finished();
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        assert.equal(state.dashboardReads, 2, "This case must exercise two concurrent dashboard reads.");
+        assert.equal(state.dashboardReads, 2, "This case must exercise an initial snapshot and a held refresh overlapping the newer ownership read.");
         await page.locator('#route-content a[href="#collection?filter=owned"]').click();
         await waitCollection(page);
         assert.equal(await page.locator("#collection-grid [data-card-id]").count(), 3);
