@@ -6,7 +6,7 @@ Spinarium is live at <https://spindowngames.com/spinarium/> through Cloudflare W
 
 The minimal “Spinarium login” accepts the owner-requested temporary username `admin` and password `1234`. The repository `config.js` intentionally selects the development preview with `previewEnabled: true`. Separately generated staging and active production configs select `previewEnabled: false`, `apiBase: "/api"` and enabled signup, using actual D1 accounts. Source preview switches are not the deployed account configuration. This development preview has no verified identity, administrator authority, backend requests, ownership or claim capability. Sign-out and reload clear its in-memory preview session. Signup/recovery remain unavailable.
 
-Home has two choices: My Collection and Explore Veilings. Collection grid, filters, statistics and selected details live on separate collection/explore routes. Revealed, Uncollected and Upcoming sit inside Explore; secondary destinations sit behind Menu on every screen size. Details open only after selecting a card. Collections remain empty, black slots contain no hidden artwork or invented characters, and Upcoming has an honest empty state. Registration input and submission remain disabled.
+Home has two choices: My Collection and Explore Veilings. Collection grid, search, sorting, statistics and selected details live on separate collection/explore routes. Revealed, Uncollected and Upcoming sit inside Explore; secondary destinations sit behind Menu on every screen size. Details open only after selecting a card. Collections remain empty, black slots contain no hidden artwork or invented characters, and Upcoming has an honest empty state. Registration input and submission remain disabled.
 
 The first-entry cinematic begins on black. A centered curved medieval ribbon with triangular ends unfurls from the middle, “Welcome to your Spinarium” appears with browser speech, pauses, then shrinks to the top while content fades in row by row. No Skip button or Escape shortcut is provided. Later entries bypass it through the browser-local `spinarium.preview.introduction.v3` preference. Reduced-motion visitors receive a brief still welcome with automatic entry and no voice/movement. Mute stops speech; blocked or unavailable speech never prevents entry. Timers and speech clear on logout or dialog closure.
 
@@ -28,7 +28,7 @@ See [activation](../docs/SPINARIUM-ACTIVATION.md), [migration](../docs/SPINARIUM
 
 ## Member showcase and Veiling Studio
 
-The live workflow is **Create Veiling → Save draft → Publish to Public or Upcoming**. Created Veilings are searchable and filterable. A name is enough to save an initial draft. Saved changes stay private until **Publish changes** is confirmed. Public means signed-in members; anonymous visitors do not receive showcase content.
+The live workflow is **Create Veiling → Save draft → Publish to Public or Upcoming**. Created Veilings are searchable and filterable. A name is enough to save an initial draft. Leaving Studio with unsaved text or selected artwork offers Save draft and leave, Discard changes, or Keep editing, including browser Back/Forward and sign-out. Closing or reloading the page uses the browser’s unsaved-work warning. Drafts are held only in memory until explicitly saved; sign-out or session expiry clears them. Saved changes stay private until **Publish changes** is confirmed. Public means signed-in members; anonymous visitors do not receive showcase content.
 
 Upcoming offers **Coming soon** or an optional calendar date. Publishing is always manual. Administrators can move the approved version between Public and Upcoming or hide it without publishing pending edits. Members browse approved content from **Explore Veilings** and **Upcoming**, including with an empty collection. Viewing or publishing a Veiling grants no ownership or discovery.
 
@@ -50,6 +50,8 @@ node scripts/verify-spinarium-ownership.mjs
 node scripts/verify-spinarium-showcase.mjs
 node scripts/verify-spinarium-studio.mjs
 node scripts/verify-spinarium-intro.mjs
+node scripts/verify-spinarium-navigation.mjs
+node scripts/verify-spinarium-loading.mjs
 NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify-spinarium.cjs
 NODE_PATH=/tmp/spindown-qa/node_modules BROWSER_PATH=/usr/bin/chromium node scripts/verify.cjs
 ```

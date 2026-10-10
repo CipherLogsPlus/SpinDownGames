@@ -436,17 +436,18 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
       await assertNoBrowserCredentials(preview);
       assertNoDemoRequests(observedPreview.requests);
     });
-    await test("empty preview search, filters, and sorting do not invent records", async () => {
+    await test("empty preview search and sorting do not invent records or offer impossible filters", async () => {
       await preview.locator("#collection-search").fill("no such card");
       await assertBlankCards(preview, "#collection-grid", 10);
       await preview.locator("#collection-search").fill("");
-      for (const filter of ["all", "owned", "discovered", "unowned", "undiscovered"]) {
-        await preview.locator("#collection-filter").selectOption(filter);
-        await preview.waitForFunction((value) => location.hash.includes(`filter=${value}`), filter);
+      assert.equal(await preview.locator("#collection-filter").count(), 0);
+      assert.equal(await preview.locator("#catalog-search").getAttribute("placeholder"), "Search my collection…");
+      for (const filter of ["all", "unowned", "discovered", "undiscovered"]) {
+        await preview.evaluate(value => { location.hash = `collection?filter=${value}`; }, filter);
+        await preview.waitForFunction(() => !document.querySelector("#dashboard-view").hidden);
         await assertBlankCards(preview, "#collection-grid", 10);
       }
       for (const sort of ["number", "name", "rarity", "release"]) await preview.locator("#collection-sort").selectOption(sort);
-      await preview.locator("#collection-filter").selectOption("owned");
       await preview.locator("#collection-sort").selectOption("number");
     });
     await test("registration remains disabled, cannot accept a claim, and cannot change ownership", async () => {
@@ -1128,7 +1129,10 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
       await fixture.page.locator("#password-reset-password").fill(fixturePassword);
       await fixture.page.locator("#password-reset-confirm").fill(fixturePassword);
       await fixture.page.locator("#password-reset-submit").click();
-      await fixture.page.waitForFunction(() => document.querySelector("#password-reset-feedback").textContent.trim());
+      // A nonempty status also matches "Saving your new password…". Wait for
+      // the terminal generic error before checking completion cleanup.
+      await fixture.page.waitForFunction(() => document.querySelector("#password-reset-fields").disabled &&
+        /invalid|expired/i.test(document.querySelector("#password-reset-feedback").textContent));
       assert.doesNotMatch(await fixture.page.locator("#password-reset-feedback").innerText(), /Private|token or account/);
       assert.equal(await fixture.page.locator("#password-reset-password").inputValue(), "");
       assert.equal(await fixture.page.locator("#password-reset-confirm").inputValue(), "");

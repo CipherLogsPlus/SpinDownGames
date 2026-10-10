@@ -2,7 +2,8 @@ import { requireCsrf, requireSession, type AuthSession } from './auth';
 import { HttpError, json, readBytes, readJson } from './http';
 import type { Env } from './types';
 import { getAdminRole, handleAdminAccounts } from './admin-accounts';
-import { CATALOG_WITH_PUBLICATION, PUBLICATION_COLUMN, handleShowcase, publicationOf, publicationProjection,
+import { ADMIN_ACTOR_GUARD, adminActorValues } from './admin-authorization';
+import { CATALOG_WITH_PUBLICATION, LEGACY_CATALOG_VISIBLE, PUBLICATION_COLUMN, handleShowcase, publicationOf, publicationProjection,
   publishPublication, type CatalogRow } from './showcase';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -139,12 +140,12 @@ async function dashboard(env: Env, session: AuthSession): Promise<Response> {
     db.prepare(`${CATALOG_WITH_PUBLICATION}
       WHERE EXISTS (
         SELECT 1 FROM ownerships o WHERE o.user_id = ? AND o.veiling_id = v.id
-      ) ORDER BY p.veiling_id IS NULL AND v.status = 'draft',
-        CASE WHEN p.veiling_id IS NOT NULL THEN p.character_number WHEN v.status != 'draft' THEN v.character_number END, v.id`).bind(session.userId),
+      ) ORDER BY p.veiling_id IS NULL AND NOT ${LEGACY_CATALOG_VISIBLE},
+        CASE WHEN p.veiling_id IS NOT NULL THEN p.character_number WHEN ${LEGACY_CATALOG_VISIBLE} THEN v.character_number END, v.id`).bind(session.userId),
     db.prepare(`SELECT o.* FROM ownerships o
       WHERE o.user_id = ? ORDER BY o.acquired_at, o.id`).bind(session.userId),
     db.prepare(`SELECT d.* FROM discoveries d JOIN catalog_veilings v ON v.id = d.veiling_id
-      WHERE (v.status != 'draft' OR EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id)) AND EXISTS (
+      WHERE (${LEGACY_CATALOG_VISIBLE} OR EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id)) AND EXISTS (
         SELECT 1 FROM ownerships o WHERE o.user_id = ? AND o.veiling_id = d.veiling_id
       )`).bind(session.userId),
   ]);
@@ -158,7 +159,7 @@ async function dashboard(env: Env, session: AuthSession): Promise<Response> {
     profile: { id: session.userId, displayName: session.displayName, memberSince: session.memberSince, avatarSrc: null },
     veilings: veilings.map((row) => {
       const publication = publicationOf(row);
-      const unavailable = !publication && row.status === 'draft';
+      const unavailable = !publication && !row.legacy_content_visible;
       const revealed = Boolean(publication) || !unavailable && discovered.get(row.id)?.status === 'revealed';
       const name = publication ? publication.name : row.name;
       const description = publication ? publication.description : row.description;
@@ -198,18 +199,18 @@ async function ownershipDetail(env: Env, session: AuthSession, id: string): Prom
   const row = await env.DB.withSession('first-primary').prepare(`
     SELECT o.id, o.user_id, o.veiling_id, o.acquisition, o.acquired_at,
       v.character_number, v.name, v.description, v.artwork_id, v.status AS catalog_status,
-      d.status AS discovery_status, ${PUBLICATION_COLUMN}
+      d.status AS discovery_status, ${PUBLICATION_COLUMN}, ${LEGACY_CATALOG_VISIBLE} AS legacy_content_visible
     FROM ownerships o JOIN catalog_veilings v ON v.id = o.veiling_id
     LEFT JOIN veiling_publications p ON p.veiling_id=v.id
     LEFT JOIN discoveries d ON d.veiling_id = v.id
     WHERE o.id = ? AND o.user_id = ?
   `).bind(id, session.userId).first<OwnershipRow & {
     character_number: number | null; name: string; description: string;
-    artwork_id: string | null; discovery_status: DiscoveryRow['status'] | null; catalog_status: CatalogRow['status']; publication_json: string | null;
+    artwork_id: string | null; discovery_status: DiscoveryRow['status'] | null; catalog_status: CatalogRow['status']; publication_json: string | null; legacy_content_visible: number;
   }>();
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'The ownership was not found.');
   const publication = publicationOf(row);
-  const unavailable = !publication && row.catalog_status === 'draft';
+  const unavailable = !publication && !row.legacy_content_visible;
   const revealed = Boolean(publication) || !unavailable && row.discovery_status === 'revealed';
   const artworkId = publication ? publication.artwork_id : row.artwork_id;
   return json({
@@ -241,16 +242,19 @@ async function createVeiling(request: Request, env: Env, session: AuthSession): 
     results = await db.batch<CatalogRow>([
       db.prepare(`INSERT INTO catalog_veilings
         (id, name, description, character_number, status, rarity, edition, created_by, updated_by, created_at, updated_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${ADMIN_EXISTS}`)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${ADMIN_ACTOR_GUARD}`)
         .bind(id, input.name, input.description, input.number, input.status, input.rarity, input.edition,
-          session.userId, session.userId, now, now, session.userId),
+          session.userId, session.userId, now, now, ...adminActorValues(session)),
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
         SELECT ?, id, ?, 'create', NULL, ${AUDIT_JSON}, ? FROM catalog_veilings WHERE id = ? AND changes() = 1`)
         .bind(crypto.randomUUID(), session.userId, now, id),
       db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id),
     ]);
   } catch (error) { catalogDatabaseError(error); }
-  if (results![0].meta.changes !== 1) throw new HttpError(403, 'ADMIN_REQUIRED', 'Trusted administrator access is required.');
+  if (results![0].meta.changes !== 1) {
+    await requireSession(request, env);
+    throw new HttpError(403, 'ADMIN_REQUIRED', 'Trusted administrator access is required.');
+  }
   return json(adminProjection(results![2].results[0] as CatalogRow), 201);
 }
 
@@ -266,9 +270,9 @@ async function updateVeiling(request: Request, env: Env, session: AuthSession, i
     results = await db.batch<CatalogRow>([
       db.prepare(`UPDATE catalog_veilings SET name = ?, description = ?, character_number = ?, status = ?,
         rarity = ?, edition = ?, updated_by = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND revision = ? AND ${ADMIN_EXISTS}`)
+        WHERE id = ? AND revision = ? AND ${ADMIN_ACTOR_GUARD}`)
         .bind(input.name, input.description, input.number, input.status, input.rarity, input.edition,
-          session.userId, now, id, existing.revision, session.userId),
+          session.userId, now, id, existing.revision, ...adminActorValues(session)),
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
         SELECT ?, id, ?, 'update', ?, ${AUDIT_JSON}, ? FROM catalog_veilings WHERE id = ? AND changes() = 1`)
         .bind(crypto.randomUUID(), session.userId, JSON.stringify(auditProjection(existing)), now, id),
@@ -276,6 +280,7 @@ async function updateVeiling(request: Request, env: Env, session: AuthSession, i
     ]);
   } catch (error) { catalogDatabaseError(error); }
   if (results![0].meta.changes !== 1) {
+    await requireSession(request, env);
     await requireAdmin(env, session);
     throw new HttpError(409, 'CATALOG_CHANGED', 'The catalog changed. Reload before saving again.');
   }
@@ -310,27 +315,30 @@ async function uploadArtwork(request: Request, env: Env, session: AuthSession, i
   const extension = imageExtension(contentType, bytes);
   const artworkId = crypto.randomUUID();
   const objectKey = `veilings/${id}/${artworkId}.${extension}`;
-  const now = Math.floor(Date.now() / 1000);
   const stored = await env.ARTWORK.put(objectKey, bytes, {
     onlyIf: { etagDoesNotMatch: '*' },
     httpMetadata: { contentType, cacheControl: 'private, no-store' },
   });
   if (!stored) throw new HttpError(409, 'ARTWORK_CONFLICT', 'The artwork could not be stored. Try again.');
+  const now = Math.floor(Date.now() / 1000);
   let results: D1Result<CatalogRow>[];
   try {
     results = await db.batch<CatalogRow>([
       db.prepare(`INSERT INTO artwork (id, veiling_id, object_key, content_type, byte_length, created_by, created_at)
-        SELECT ?, id, ?, ?, ?, ?, ? FROM catalog_veilings WHERE id = ? AND revision = ? AND ${ADMIN_EXISTS}`)
-        .bind(artworkId, objectKey, contentType, bytes.byteLength, session.userId, now, id, existing.revision, session.userId),
+        SELECT ?, id, ?, ?, ?, ?, ? FROM catalog_veilings WHERE id = ? AND revision = ? AND ${ADMIN_ACTOR_GUARD}`)
+        .bind(artworkId, objectKey, contentType, bytes.byteLength, session.userId, now, id, existing.revision, ...adminActorValues(session)),
+      // The successful guarded insert authorizes the rest of this transaction.
+      // Re-evaluating time here could leave a partial attachment at expiry.
       db.prepare(`UPDATE catalog_veilings SET artwork_id = ?, updated_by = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND revision = ? AND EXISTS (SELECT 1 FROM artwork WHERE id = ?) AND ${ADMIN_EXISTS}`)
-        .bind(artworkId, session.userId, now, id, existing.revision, artworkId, session.userId),
+        WHERE id = ? AND revision = ? AND EXISTS (SELECT 1 FROM artwork WHERE id = ?) AND changes() = 1`)
+        .bind(artworkId, session.userId, now, id, existing.revision, artworkId),
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
         SELECT ?, id, ?, 'artwork', ?, ${AUDIT_JSON}, ? FROM catalog_veilings WHERE id = ? AND changes() = 1`)
         .bind(crypto.randomUUID(), session.userId, JSON.stringify(auditProjection(existing)), now, id),
       db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id),
     ]);
     if (results[1].meta.changes !== 1) {
+      await requireSession(request, env);
       await requireAdmin(env, session);
       throw new HttpError(409, 'CATALOG_CHANGED', 'The catalog changed. Reload before uploading again.');
     }
@@ -348,7 +356,7 @@ async function artwork(env: Env, session: AuthSession, id: string): Promise<Resp
     WHERE a.id = ? AND (${ADMIN_EXISTS} OR EXISTS(
       SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id AND p.artwork_id=a.id
     ) OR (
-      v.status != 'draft' AND v.artwork_id = a.id
+      ${LEGACY_CATALOG_VISIBLE} AND v.artwork_id = a.id
       AND NOT EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id)
       AND EXISTS (SELECT 1 FROM discoveries d WHERE d.veiling_id = v.id AND d.status = 'revealed')
       AND EXISTS (

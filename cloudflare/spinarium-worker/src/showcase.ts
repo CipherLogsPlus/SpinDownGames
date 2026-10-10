@@ -2,11 +2,9 @@ import { requireCsrf, requireSession, type AuthSession } from './auth';
 import { HttpError, json, readJson } from './http';
 import { getAdminRole } from './admin-accounts';
 import type { Env } from './types';
+import { ADMIN_ACTOR_GUARD, adminActorValues } from './admin-authorization';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTOR = `EXISTS (SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id
-  JOIN admin_allowlist a ON a.user_id=u.id
-  WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? AND u.disabled=0 AND a.role IN ('admin','owner'))`;
 
 export interface PublicationRow {
   veiling_id: string; name: string; description: string; character_number: number | null;
@@ -18,6 +16,7 @@ export interface CatalogRow {
   status: 'draft' | 'active' | 'retired'; rarity: string | null; edition: string | null; artwork_id: string | null;
   revision: number; created_by: string; updated_by: string; created_at: number; updated_at: number;
   publication_json?: string | null;
+  legacy_content_visible: number;
 }
 function snapshotJson(alias: string): string {
   return `json_object('veiling_id',${alias}.veiling_id,'name',${alias}.name,'description',${alias}.description,
@@ -26,7 +25,14 @@ function snapshotJson(alias: string): string {
     'source_revision',${alias}.source_revision,'updated_at',${alias}.updated_at)`;
 }
 export const PUBLICATION_COLUMN = `CASE WHEN p.veiling_id IS NOT NULL THEN ${snapshotJson('p')} ELSE NULL END AS publication_json`;
-export const CATALOG_WITH_PUBLICATION = `SELECT v.*, ${PUBLICATION_COLUMN} FROM catalog_veilings v
+// Publication history is immutable and indexed. It distinguishes a deliberately
+// hidden snapshot (including historical hides) from a never-managed legacy row.
+// Hiding must never make an editable draft eligible for the legacy fallback.
+export const LEGACY_CATALOG_VISIBLE = `(v.status != 'draft' AND NOT EXISTS (
+  SELECT 1 FROM publication_audit history WHERE history.veiling_id=v.id
+))`;
+export const CATALOG_WITH_PUBLICATION = `SELECT v.*, ${PUBLICATION_COLUMN},
+  ${LEGACY_CATALOG_VISIBLE} AS legacy_content_visible FROM catalog_veilings v
   LEFT JOIN veiling_publications p ON p.veiling_id=v.id`;
 export function publicationOf(row: { publication_json?: string | null }): PublicationRow | null {
   return row.publication_json ? JSON.parse(row.publication_json) as PublicationRow : null;
@@ -90,10 +96,10 @@ export async function publishPublication(request: Request, env: Env, session: Au
   const first = db.prepare(`INSERT INTO publication_audit
     (id,veiling_id,actor_user_id,action,before_json,after_json,catalog_revision,created_at)
     SELECT ?,v.id,?,?,${before},${after},v.revision+1,? FROM catalog_veilings v
-    WHERE v.id=? AND v.revision=? AND ${ACTOR}
+    WHERE v.id=? AND v.revision=? AND ${ADMIN_ACTOR_GUARD}
       ${!useDraft ? 'AND EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id)' : ''}`)
     .bind(eventId, session.userId, action, ...(visibility === 'private' ? [] : [visibility, releaseDate, now]), now,
-      id, expected, session.sessionTokenHash, session.userId, now);
+      id, expected, ...adminActorValues(session));
   // One transactional audit marker captures current authority, session and CAS.
   // Every subsequent change requires that marker; any failure rolls all back.
   const statements = [first,

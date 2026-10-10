@@ -8,9 +8,10 @@
     "check": "tsc --noEmit",
     "build": "esbuild src/index.ts --bundle --format=esm --platform=browser --target=es2022 --external:node:* --outfile=dist/index.js",
     "test": "npm run build && node --import tsx --test test/*.test.ts",
+    "test:assets": "node --test scripts/verify-assets.test.mjs",
     "db:migrate:local": "wrangler d1 migrations apply spinarium-local --local",
     "dry-run": "wrangler deploy --dry-run",
-    "prepare:staging": "node scripts/prepare-staging-assets.mjs",
+    "prepare:staging": "node scripts/prepare-staging-assets.mjs --accounts-enabled --signup-enabled",
     "dry-run:staging": "npm run prepare:staging && wrangler deploy --config wrangler.staging.jsonc --dry-run",
     "prepare:production": "node scripts/prepare-staging-assets.mjs --production --accounts-enabled --signup-enabled",
     "dry-run:production": "npm run prepare:production && wrangler deploy --config wrangler.production.jsonc --dry-run"

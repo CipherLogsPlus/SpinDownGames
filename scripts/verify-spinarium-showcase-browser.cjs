@@ -55,9 +55,9 @@ async function signal(promise) {
   finally { clearTimeout(timer); }
 }
 function server(rows = sampleCatalog()) {
-  return { rows: new Map(rows.map(row => [row.id, clone(row)])), calls: [], errors: [], failures: new Map(), held: new Map(), nextConflict: false, nextId: 20 };
+  return { rows: new Map(rows.map(row => [row.id, clone(row)])), calls: [], errors: [], failures: new Map(), held: new Map(), unauthorized: new Set(), nextConflict: false, nextId: 20 };
 }
-async function fixture(browser, state, { admin = false, signedIn = true, hash = "explore?filter=discovered", width = 1280 } = {}) {
+async function fixture(browser, state, { admin = false, signedIn = true, hash = "explore?filter=discovered", width = 1280, fastReadDeadline = false, captureExpiry = false } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: "reduce" });
   let authenticated = signedIn;
   const errors = [];
@@ -65,6 +65,17 @@ async function fixture(browser, state, { admin = false, signedIn = true, hash = 
     // The baseline ribbon intro is covered separately; this is only a device
     // presentation preference, with no role or account authority.
     await context.addInitScript(key => localStorage.setItem(key, "seen"), introKey);
+    if (fastReadDeadline) await context.addInitScript(() => {
+      const original = window.setTimeout.bind(window);
+      window.setTimeout = (callback, delay, ...args) => original(callback, delay === 30000 ? 200 : delay, ...args);
+    });
+    if (captureExpiry) await context.addInitScript(() => {
+      const original = window.setTimeout.bind(window);
+      window.setTimeout = (callback, delay, ...args) => {
+        if (delay > 3500000 && delay <= 3600000) window.expireFixtureSession = callback;
+        return original(callback, delay, ...args);
+      };
+    });
     if (signedIn) await context.addCookies([{ name: "spinarium_session", value: cookie, url: base, httpOnly: true, sameSite: "Lax" }]);
     await context.route("**/spinarium/config.js*", route => route.fulfill({ status: 200, contentType: "text/javascript",
       body: 'export const spinariumConfig = Object.freeze({previewEnabled:false,backend:"cloudflare",authProvider:"password",apiBase:"/api",signupEnabled:false});' }));
@@ -83,8 +94,6 @@ async function fixture(browser, state, { admin = false, signedIn = true, hash = 
           assert.equal(request.postData(), "{}"); authenticated = false;
           return respond({ signedOut: true }, 200, { "set-cookie": "spinarium_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
         }
-        if (url.pathname === "/api/dashboard" && method === "GET") return respond(emptyDashboard());
-        if (url.pathname === "/api/admin/access" && method === "GET") return respond({ admin, role: admin ? "admin" : null });
         if (url.pathname === `/api/artwork/${uuid(80)}` && method === "GET") {
           if (!admin && ![...state.rows.values()].some(row => row.publication?.artworkUrl === url.pathname)) return respond({ code: "NOT_FOUND" }, 404);
           return route.fulfill({ status: 200, contentType: "image/png", headers: { "cache-control": "no-store" },
@@ -93,10 +102,17 @@ async function fixture(browser, state, { admin = false, signedIn = true, hash = 
         const hold = state.held.get(url.pathname);
         if (hold) { state.held.delete(url.pathname); hold.markRequested(); await hold.wait; }
         try {
+          if (state.unauthorized.has(url.pathname)) return await respond({ code: "UNAUTHORIZED" }, 401);
           if (state.failures.get(url.pathname)) {
             state.failures.set(url.pathname, state.failures.get(url.pathname) - 1);
             return await respond({ code: "UNAVAILABLE", message: privateMessage }, 503);
           }
+          if (url.pathname === "/api/dashboard" && method === "GET") return await respond(emptyDashboard());
+          if (url.pathname === "/api/admin/access" && method === "GET") return await respond({ admin, role: admin ? "admin" : null });
+          if (url.pathname === "/api/admin/accounts/summary" && method === "GET" && admin)
+            return await respond({ total: 0, active: 0, disabled: 0, admins: 0, owners: 0, currentActorRole: "admin" });
+          if (url.pathname === "/api/admin/accounts" && method === "GET" && admin)
+            return await respond({ accounts: [], limit: Number(url.searchParams.get("limit")), nextCursor: null });
           if (url.pathname === "/api/showcase" && method === "GET") return await respond({ schemaVersion: "1", mode: "live", veilings: [...state.rows.values()].map(publicSnapshot).filter(Boolean) });
           const detail = /^\/api\/showcase\/([^/]+)$/.exec(url.pathname);
           if (detail && method === "GET") {
@@ -472,6 +488,195 @@ async function publish(page, state, action, expected, expectedName) {
         assert.equal(await page.locator("#studio-artwork").evaluate(node => node.files.length), 0);
         assert(!(await page.locator('[data-studio-action="public"]').isDisabled()));
         assert.equal(state.calls.filter(call => call.path.endsWith("/artwork") && call.method === "POST").length, 1);
+      });
+    });
+    await test("dirty Studio survives every route, repeated navigation, Back and Forward cancellation", async () => {
+      const state = server([]);
+      await withFixtures(browser, state, [{ admin: true, hash: "dashboard" }], async ({ page }) => {
+        await page.waitForSelector("#hub-view:not([hidden])");
+        await navigate(page, "admin"); await waitStudio(page);
+        await page.locator("#studio-create").click();
+        await page.locator("#studio-name").fill("Unsaved route draft");
+        const lore = "Private unsaved lore. ".repeat(80);
+        await page.locator("#studio-description").fill(lore);
+        for (const destination of ["dashboard", "collection", "explore", "upcoming", "accounts", "settings", "reset-password"]) {
+          await navigate(page, destination);
+          await page.waitForSelector("#studio-leave-dialog[open]");
+          assert.equal(await page.locator("#studio-name").inputValue(), "Unsaved route draft");
+          await page.locator("#studio-leave-keep").click();
+          await page.waitForFunction(() => location.hash === "#admin");
+          assert.equal(await page.locator("#studio-description").inputValue(), lore);
+        }
+        await navigate(page, "collection"); await page.waitForSelector("#studio-leave-dialog[open]");
+        await navigate(page, "settings");
+        assert.equal(await page.locator("#studio-leave-dialog[open]").count(), 1);
+        await page.keyboard.press("Escape"); await page.waitForFunction(() => location.hash === "#admin");
+        assert.equal(await page.locator("#studio-description").inputValue(), lore);
+        await page.goBack(); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-keep").click(); await page.waitForFunction(() => location.hash === "#admin");
+        await page.goBack(); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-discard").click(); await page.waitForSelector("#hub-view:not([hidden])");
+        await page.goForward(); await waitStudio(page);
+        assert.equal(await page.locator("#studio-editor-form").count(), 0);
+        await navigate(page, "settings"); await page.waitForSelector("#signed-in-account:not([hidden])");
+        await page.goBack(); await waitStudio(page);
+        await page.locator("#studio-create").click(); await page.locator("#studio-name").fill("Forward draft");
+        await page.goForward(); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-keep").click(); await page.waitForFunction(() => location.hash === "#admin");
+        assert.equal(await page.locator("#studio-name").inputValue(), "Forward draft");
+        assert.equal(state.calls.filter(call => call.method !== "GET").length, 0);
+      });
+    });
+    await test("Studio saves privately before leaving and failed saves keep the draft", async () => {
+      const state = server([]);
+      await withFixtures(browser, state, [{ admin: true, hash: "admin" }], async ({ page }) => {
+        await waitStudio(page); await page.locator("#studio-create").click();
+        await page.locator("#studio-name").fill("Saved before navigating");
+        await page.locator("#navigation-toggle").click();
+        await page.locator('#sidebar-nav a[data-nav="collection"]').click();
+        await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-save").click();
+        await page.waitForSelector("#dashboard-view:not([hidden])");
+        assert.equal(state.rows.get(uuid(20)).name, "Saved before navigating");
+        assert.equal(state.rows.get(uuid(20)).publication, null);
+        await navigate(page, "admin"); await waitStudio(page); await page.locator(studioItem(uuid(20))).click();
+        await page.locator("#studio-description").fill("These words must survive a failed save.");
+        state.failures.set(`/api/admin/veilings/${uuid(20)}`, 1);
+        await navigate(page, "dashboard"); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-save").click();
+        await page.waitForFunction(() => document.querySelector("#studio-leave-feedback")?.textContent.includes("could not be completed"));
+        assert(await page.locator("#studio-leave-dialog").isVisible());
+        await page.locator("#studio-leave-keep").click(); await page.waitForFunction(() => location.hash === "#admin");
+        assert.equal(await page.locator("#studio-description").inputValue(), "These words must survive a failed save.");
+        assert.equal(state.rows.get(uuid(20)).description, "");
+        assert(!state.calls.some(call => call.path.endsWith("/publication")));
+      });
+    });
+    await test("Studio guards sign-out and external navigation, warns on unload, and clears private drafts on sign-out", async () => {
+      const state = server([]);
+      await withFixtures(browser, state, [{ admin: true, hash: "admin" }], async ({ page }) => {
+        await waitStudio(page); await page.locator("#studio-create").click(); await page.locator("#studio-name").fill("Sign-out draft");
+        assert(await page.evaluate(() => {
+          const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented;
+        }));
+        await page.locator("a.brand").click(); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-keep").click();
+        assert.equal(new URL(page.url()).hash, "#admin");
+        await page.locator("#sign-out").click(); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-keep").click();
+        assert(!state.calls.some(call => call.path === "/api/auth/logout"));
+        await page.locator("#sign-out").click(); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-save").click(); await page.waitForSelector("#auth-view:not([hidden])");
+        assert.equal(state.rows.get(uuid(20)).name, "Sign-out draft");
+        assert.equal(state.rows.get(uuid(20)).publication, null);
+        assert.equal(await page.locator("#veiling-studio-content").textContent(), "");
+        assert.equal(state.calls.filter(call => call.path === "/api/auth/logout").length, 1);
+        assert(!(await page.locator("body").textContent()).includes("Sign-out draft"));
+      });
+    });
+    await test("forced 401 and session expiry clear Studio drafts even while a leave confirmation is open", async () => {
+      for (const expired of [false, true]) {
+        const state = server([]);
+        await withFixtures(browser, state, [{ admin: true, hash: "admin", captureExpiry: expired }], async ({ page }) => {
+          await waitStudio(page); await page.locator("#studio-create").click(); await page.locator("#studio-name").fill("Session-bound private draft");
+          await navigate(page, "collection"); await page.waitForSelector("#studio-leave-dialog[open]");
+          if (expired) await page.evaluate(() => window.expireFixtureSession());
+          else {
+            state.unauthorized.add("/api/admin/veilings");
+            await page.locator("#studio-leave-save").click();
+          }
+          await page.waitForSelector("#auth-view:not([hidden])");
+          await page.waitForFunction(() => location.hash === "#signin");
+          assert.equal(await page.locator("#studio-leave-dialog").count(), 0);
+          assert.equal(await page.locator("#veiling-studio-content").textContent(), "");
+          assert(!(await page.locator("body").textContent()).includes("Session-bound private draft"));
+          assert.equal(state.rows.size, 0);
+        });
+      }
+    });
+    await test("a saved response arriving after session expiry cannot restore the private Studio", async () => {
+      const state = server([]);
+      await withFixtures(browser, state, [{ admin: true, hash: "admin", captureExpiry: true }], async ({ page }) => {
+        await waitStudio(page); await page.locator("#studio-create").click(); await page.locator("#studio-name").fill("Late private result");
+        const hold = deferred(); state.held.set("/api/admin/veilings", hold);
+        await navigate(page, "collection"); await page.waitForSelector("#studio-leave-dialog[open]");
+        await page.locator("#studio-leave-save").click(); await signal(hold.requested);
+        await page.evaluate(() => window.expireFixtureSession());
+        await page.waitForSelector("#auth-view:not([hidden])");
+        hold.release(); await signal(hold.finished);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.equal(new URL(page.url()).hash, "#signin");
+        assert.equal(await page.locator("#studio-leave-dialog").count(), 0);
+        assert.equal(await page.locator("#veiling-studio-content").textContent(), "");
+        assert(!(await page.locator("body").textContent()).includes("Late private result"));
+      });
+    });
+    await test("Studio blocks departure during a save and allows it after the save settles", async () => {
+      const state = server([]);
+      await withFixtures(browser, state, [{ admin: true, hash: "admin" }], async ({ page }) => {
+        await waitStudio(page); await page.locator("#studio-create").click(); await page.locator("#studio-name").fill("In-flight draft");
+        const hold = deferred(); state.held.set("/api/admin/veilings", hold);
+        await page.locator("#studio-save").click(); await signal(hold.requested);
+        await navigate(page, "collection"); await page.waitForFunction(() => location.hash === "#admin");
+        await page.locator("#sign-out").click();
+        assert(!state.calls.some(call => call.path === "/api/auth/logout"));
+        hold.release(); await signal(hold.finished);
+        await page.waitForFunction(() => document.querySelector("#studio-save")?.disabled === false);
+        await navigate(page, "collection"); await page.waitForSelector("#dashboard-view:not([hidden])");
+        assert.equal(state.rows.get(uuid(20)).name, "In-flight draft");
+      });
+    });
+    await test("keyboard skip link preserves every main destination and unsaved Studio content", async () => {
+      const state = server();
+      await withFixtures(browser, state, [{ admin: true, hash: "dashboard" }], async ({ page }) => {
+        for (const destination of ["dashboard", "collection", "explore", "upcoming", "accounts", "settings", "admin"]) {
+          await navigate(page, destination);
+          if (destination === "admin") {
+            await waitStudio(page); await page.locator("#studio-create").click(); await page.locator("#studio-name").fill("Skip-safe draft");
+          } else if (["explore", "upcoming"].includes(destination)) await waitShowcase(page);
+          else await page.waitForFunction(hash => location.hash === `#${hash}`, destination);
+          const url = page.url();
+          await page.locator(".skip-link").focus(); await page.keyboard.press("Enter");
+          assert.equal(page.url(), url);
+          assert(await page.locator("#main-content").evaluate(node => document.activeElement === node));
+          assert.equal(await page.locator("#studio-leave-dialog").count(), 0);
+          if (destination === "admin") assert.equal(await page.locator("#studio-name").inputValue(), "Skip-safe draft");
+        }
+      });
+    });
+    await test("admin discovery failure or timeout never blocks a healthy personal collection", async () => {
+      for (const timeout of [false, true]) {
+        const state = server();
+        const hold = timeout ? deferred() : null;
+        if (hold) state.held.set("/api/admin/access", hold);
+        else state.failures.set("/api/admin/access", 1);
+        await withFixtures(browser, state, [{ admin: true, hash: "collection", fastReadDeadline: timeout }], async ({ page }) => {
+          await page.waitForSelector("#dashboard-view:not([hidden])");
+          await page.waitForSelector("#admin-access-status:not([hidden])");
+          assert(await page.locator("#loading-status").isHidden());
+          assert(await page.locator("#admin-nav").isHidden());
+          if (hold) { hold.release(); await signal(hold.finished); }
+          await page.locator("#admin-access-status button").click();
+          await page.waitForFunction(() => document.querySelector("#admin-nav").hidden === false);
+          assert(await page.locator("#dashboard-view").isVisible());
+          assert(await page.locator("#admin-access-status").isHidden());
+        });
+      }
+    });
+    await test("collection refresh errors settle loading and preserve the last successful snapshot", async () => {
+      const state = server([]);
+      await withFixtures(browser, state, [{ admin: true, hash: "admin" }], async ({ page }) => {
+        await waitStudio(page); await page.locator("#studio-create").click(); await page.locator("#studio-name").fill("Refresh fixture");
+        state.failures.set("/api/dashboard", 1);
+        await saveDraft(page);
+        await page.waitForFunction(() => document.querySelector("#loading-status")?.textContent.includes("last loaded collection"));
+        await navigate(page, "collection"); await page.waitForSelector("#dashboard-view:not([hidden])");
+        assert.match(await page.locator("#loading-status").textContent(), /couldn’t refresh/);
+        assert.equal(await page.locator("#collection-filter").count(), 0);
+        assert.equal(await page.locator("#catalog-search").getAttribute("placeholder"), "Search my collection…");
+        await page.locator("#loading-status button").click();
+        await page.waitForSelector("#loading-status", { state: "hidden" });
+        assert(await page.locator("#dashboard-view").isVisible());
       });
     });
     await test("showcase and studio are keyboard accessible and fit mobile with enlarged text", async () => {

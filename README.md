@@ -92,17 +92,21 @@ The supplied STL geometry and silver presentation are retained. The custom GLB r
 
 ## Browser verification
 
-Use Node 20+ with Playwright and axe-core available. For an isolated test setup that leaves the public site dependency-free:
+Use Node 20+ and the pinned development-only Playwright/axe-core dependencies. The public site remains dependency-free. With the local static server above running:
 
 ```sh
-npm install --prefix /tmp/spindown-qa --no-audit --no-fund playwright axe-core
-node /tmp/spindown-qa/node_modules/playwright/cli.js install chromium
-NODE_PATH=/tmp/spindown-qa/node_modules node scripts/verify.cjs
+npm ci
+npx playwright install chromium
+npm run test:browser
 ```
+
+The command runs the original-site, Spinarium, ownership and showcase browser suites. Spinarium fixtures intercept local API calls; they do not create hosted accounts or deploy anything. Use a full Git checkout so the original-site preservation baseline `a7e1dadfb49e5a6f2acd4dd1dd5af97226a25b76` is available. For a shallow clone, first run `git fetch --unshallow origin`; never substitute the current commit for the baseline.
+
+CI runs all four suites independently with Chromium and its system dependencies, a loopback-only static server and the real historical baseline. Browser logs and requested screenshots are retained as job artifacts. The separate Worker job checks backend tests, frontend contracts and staging/production packaging coherence. Root pages, shared styles/scripts and asset-only changes trigger these checks too.
 
 Optional environment variables:
 
-- `BASE_URL`: local or deployed website URL (default `http://127.0.0.1:8000`).
+- `BASE_URL`: local server URL (default `http://127.0.0.1:8000`). Only the standalone original-site command, `node scripts/verify.cjs`, also supports a deployed website; intercepted account suites must stay local.
 - `BROWSER_PATH`: an existing Chrome/Chromium executable; otherwise Playwright uses its installed browser.
 - `SCREENSHOT_DIR`: save desktop/mobile full-page and hero screenshots to this directory.
 

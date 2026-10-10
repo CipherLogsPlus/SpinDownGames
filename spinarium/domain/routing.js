@@ -9,6 +9,6 @@ export function parseRoute(hash, signedIn = false) {
     name,
     ...(ownershipRoute ? { ownershipId: path.slice("ownership/".length) } : {}),
     ...(showcaseRoute ? { veilingId: path.slice("showcase/".length) } : {}),
-    filter: filters.has(requestedFilter) ? requestedFilter : name === "explore" ? "discovered" : "owned",
+    filter: name === "collection" ? "owned" : filters.has(requestedFilter) ? requestedFilter : name === "explore" ? "discovered" : "owned",
   };
 }
