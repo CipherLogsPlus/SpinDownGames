@@ -385,6 +385,122 @@ await test("catalog writes allowlist fields, preserve server revision and use If
   auth.invalidateSession();
 });
 
+await test("active and Trash catalog reads allowlist eligibility and reject mixed or contradictory state", async () => {
+  const auth = await signedIn();
+  const calls = [];
+  const active = { ...row(), canTrash: true, trashedAt: null };
+  const trashed = { ...row(2), canTrash: false, trashedAt: "2026-10-10T00:00:00.000Z" };
+  const service = createSpinariumService(config, auth, { fetchImpl: async (path, options) => {
+    calls.push({ path, options }); return json([{ ...(path.includes("?") ? trashed : active), trashedBy: otherId }]);
+  } });
+  assert.equal((await service.listAdminVeilings())[0].canTrash, true);
+  const trash = await service.listAdminVeilings({ trashed: true });
+  assert.equal(trash[0].trashedAt, trashed.trashedAt);
+  assert.equal(trash[0].canTrash, false);
+  assert.equal("trashedBy" in trash[0], false);
+  assert.equal(calls[0].path, "/api/admin/veilings");
+  assert.equal(calls[1].path, "/api/admin/veilings?trashed=true");
+  await rejectCode(service.listAdminVeilings({ trashed: "true" }), "INVALID_INPUT", SpinariumServiceError);
+  assert.equal(calls.length, 2);
+  for (const [response, options] of [
+    [[trashed], {}], [[active], { trashed: true }], [[active, active], {}],
+    [[{ ...active, canTrash: "yes" }], {}], [[{ ...trashed, canTrash: true }], { trashed: true }],
+    [[{ ...active, status: "active" }], {}], [[{ ...trashed, trashedAt: "not-a-date" }], { trashed: true }],
+  ]) {
+    const invalid = createSpinariumService(config, auth, { fetchImpl: async () => json(response) });
+    await rejectCode(invalid.listAdminVeilings(options), "INVALID_PROJECTION", SpinariumServiceError);
+  }
+  const oldBackend = createSpinariumService(config, auth, { fetchImpl: async () => json([row()]) });
+  assert.equal((await oldBackend.listAdminVeilings())[0].canTrash, false);
+  auth.invalidateSession();
+});
+
+await test("trash and restore submit only the saved revision with CSRF and no request body", async () => {
+  const auth = await signedIn();
+  const calls = [];
+  const service = createSpinariumService(config, auth, { fetchImpl: async (path, options) => {
+    calls.push({ path, options });
+    const trash = path.endsWith("/trash");
+    return json({ ...row(trash ? 2 : 3), canTrash: !trash, trashedAt: trash ? "2026-10-10T00:00:00.000Z" : null });
+  } });
+  const trashed = await service.trashVeiling({ id: veilingId.toUpperCase(), revision: 1, name: "Ignored", permanentlyDelete: true });
+  assert.equal(trashed.revision, 2);
+  assert.equal(trashed.canTrash, false);
+  const restored = await service.restoreVeiling({ id: veilingId, revision: 2, status: "active" });
+  assert.equal(restored.trashedAt, null);
+  assert.equal(restored.canTrash, true);
+  for (const [index, call] of calls.entries()) {
+    assert.equal(call.path, `/api/admin/veilings/${veilingId}/${index ? "restore" : "trash"}`);
+    assert.equal(call.options.method, "POST");
+    assert.equal("body" in call.options, false);
+    assert.equal(call.options.headers["Content-Type"], undefined);
+    assert.equal(call.options.headers["If-Match"], `"${index + 1}"`);
+    assert.equal(call.options.headers["x-csrf-token"], csrfToken);
+    assert.equal(call.options.credentials, "same-origin");
+  }
+  for (const method of ["trashVeiling", "restoreVeiling"]) {
+    await rejectCode(service[method]({ id: veilingId }), "REVISION_REQUIRED", SpinariumServiceError);
+    await rejectCode(service[method]({ id: "../another", revision: 1 }), "INVALID_INPUT", SpinariumServiceError);
+  }
+  assert.equal(calls.length, 2);
+  auth.invalidateSession();
+});
+
+await test("trash responses require matching identity and transition; safe state conflicts never expose backend detail", async () => {
+  const auth = await signedIn();
+  for (const [status, code, expected] of [[409, "DRAFT_TRASHED", "DRAFT_TRASHED"], [409, "DRAFT_NOT_TRASHED", "DRAFT_NOT_TRASHED"],
+    [409, "DRAFT_NOT_TRASHABLE", "DRAFT_NOT_TRASHABLE"], [409, "CATALOG_CHANGED", "STALE_REVISION"],
+    [503, "ARTWORK_UNAVAILABLE", "ARTWORK_UNAVAILABLE"], [500, "DRAFT_TRASHED", "BACKEND_ERROR"]]) {
+    const service = createSpinariumService(config, auth, { fetchImpl: async () => json({ code, message: "private-provider-detail" }, status) });
+    await rejectCode(service.trashVeiling({ id: veilingId, revision: 1 }), expected, SpinariumServiceError);
+  }
+  for (const invalid of [row(2), { ...row(2), id: otherId, trashedAt: "2026-10-10T00:00:00.000Z", canTrash: false }]) {
+    const service = createSpinariumService(config, auth, { fetchImpl: async () => json(invalid) });
+    await rejectCode(service.trashVeiling({ id: veilingId, revision: 1 }), "INVALID_PROJECTION", SpinariumServiceError);
+  }
+  const service = createSpinariumService(config, auth, { fetchImpl: async () => json({ ...row(2), canTrash: false, trashedAt: "2026-10-10T00:00:00.000Z" }) });
+  await rejectCode(service.restoreVeiling({ id: veilingId, revision: 1 }), "INVALID_PROJECTION", SpinariumServiceError);
+  auth.invalidateSession();
+});
+
+await test("artwork capability is a protected allowlisted read with exact supported limits", async () => {
+  const auth = await signedIn();
+  const calls = [];
+  const status = { available: false, maxBytes: 8388608, acceptedTypes: ["image/png", "image/jpeg", "image/webp"] };
+  const service = createSpinariumService(config, auth, { fetchImpl: async (path, options) => {
+    calls.push({ path, options }); return json({ ...status, bucketName: "private-provider-detail" });
+  } });
+  assert.deepEqual(await service.getAdminArtworkStatus(), status);
+  assert.equal(calls[0].path, "/api/admin/artwork-status");
+  assert.equal(calls[0].options.method, "GET");
+  assert.equal(calls[0].options.body, undefined);
+  for (const patch of [{ available: "false" }, { maxBytes: 0 }, { maxBytes: 8388609 },
+    { acceptedTypes: ["image/svg+xml", "image/jpeg", "image/webp"] }, { acceptedTypes: ["image/png", "image/png", "image/webp"] }]) {
+    const invalid = createSpinariumService(config, auth, { fetchImpl: async () => json({ ...status, ...patch }) });
+    await rejectCode(invalid.getAdminArtworkStatus(), "INVALID_PROJECTION", SpinariumServiceError);
+  }
+  auth.invalidateSession();
+  await rejectCode(service.getAdminArtworkStatus(), "AUTH_REQUIRED", SpinariumServiceError);
+  assert.equal(calls.length, 1);
+});
+
+await test("late capability and trash responses cannot survive cancellation, signout or a replacement session", async () => {
+  for (const method of ["getAdminArtworkStatus", "trashVeiling", "restoreVeiling"]) for (const change of ["abort", "signout", "replacement"]) {
+    const auth = await signedIn();
+    let finish;
+    const controller = new AbortController();
+    const service = createSpinariumService(config, auth, { fetchImpl: async () => new Promise(resolve => { finish = resolve; }) });
+    const pending = service[method]({ id: veilingId, revision: 1, signal: controller.signal });
+    if (change === "abort") controller.abort();
+    else { auth.invalidateSession(); if (change === "replacement") await auth.consumeAuthCallback(); }
+    finish(json(method === "getAdminArtworkStatus"
+      ? { available: true, maxBytes: 8388608, acceptedTypes: ["image/png", "image/jpeg", "image/webp"] }
+      : { ...row(2), canTrash: method !== "trashVeiling", trashedAt: method === "trashVeiling" ? "2026-10-10T00:00:00.000Z" : null }));
+    await rejectCode(pending, change === "abort" ? "CANCELLED" : "AUTH_REQUIRED", SpinariumServiceError);
+    auth.invalidateSession();
+  }
+});
+
 await test("artwork uploads send raw validated content with revision and cannot choose storage keys", async () => {
   const auth = await signedIn();
   const calls = [];

@@ -31,6 +31,10 @@ const MESSAGES = Object.freeze({
   ACCOUNT_CHANGED: "This account has changed. Review its current details and confirm the action again.",
   PROTECTED_ACCOUNT: "This account is protected from that action.",
   PUBLICATION_REQUIRED: "This Veiling is private. Publish its saved draft first.",
+  ARTWORK_UNAVAILABLE: "Artwork storage is not configured. You can still save a text-only draft.",
+  DRAFT_NOT_TRASHABLE: "Only unused drafts that have never been published can be moved to Trash.",
+  DRAFT_TRASHED: "This draft is in Trash. Restore it before making changes.",
+  DRAFT_NOT_TRASHED: "This draft is no longer in Trash. Reload the catalog before continuing.",
 });
 export class SpinariumServiceError extends Error {
   constructor(code) {
@@ -77,7 +81,11 @@ function catalogRow(row) {
     !Number.isSafeInteger(row.revision) || row.revision < 1 ||
     (row.character_number != null && (!Number.isSafeInteger(row.character_number) || row.character_number < 1 || row.character_number > 999999)) ||
     (row.rarity != null && (typeof row.rarity !== "string" || row.rarity.length > 80)) ||
-    (row.edition != null && (typeof row.edition !== "string" || row.edition.length > 120)))
+    (row.edition != null && (typeof row.edition !== "string" || row.edition.length > 120)) ||
+    (row.canTrash !== undefined && typeof row.canTrash !== "boolean") ||
+    (row.trashedAt != null && (typeof row.trashedAt !== "string" || !Number.isFinite(Date.parse(row.trashedAt)))) ||
+    ((row.canTrash === true || row.trashedAt != null) && (row.status !== "draft" || row.publication != null)) ||
+    (row.canTrash === true && row.trashedAt != null))
     throw new SpinariumServiceError("INVALID_PROJECTION");
   let publication = null;
   if (row.publication != null) {
@@ -92,6 +100,8 @@ function catalogRow(row) {
     character_number: row.character_number ?? null, status: row.status,
     rarity: row.rarity ?? null, edition: row.edition ?? null,
     artworkUrl: artworkUrl(row.artworkUrl),
+    // Older API responses cannot authorize a trash action.
+    canTrash: row.canTrash === true, trashedAt: row.trashedAt ?? null,
     publication,
   };
 }
@@ -121,10 +131,11 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
         redirect: "error", referrerPolicy: "same-origin",
         headers: {
           Accept: "application/json",
-          ...(mutating ? { "Content-Type": binary ? contentType : "application/json", "x-csrf-token": csrfToken } : {}),
+          ...(mutating ? { "x-csrf-token": csrfToken } : {}),
+          ...(mutating && body !== undefined ? { "Content-Type": binary ? contentType : "application/json" } : {}),
           ...(revision != null ? { "If-Match": `"${revision}"` } : {}),
         },
-        ...(mutating ? { body: binary ? body : JSON.stringify(body) } : {}),
+        ...(mutating && body !== undefined ? { body: binary ? body : JSON.stringify(body) } : {}),
         ...(signal ? { signal } : {}),
       });
     } catch { throw new SpinariumServiceError(signal?.aborted ? "CANCELLED" : "NETWORK_ERROR"); }
@@ -137,7 +148,7 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
     const failure = { 400: "INVALID_INPUT", 403: "ACCESS_DENIED", 404: "NOT_FOUND",
       409: "STALE_REVISION", 428: "REVISION_REQUIRED", 429: "RATE_LIMITED", 503: "BACKEND_UNAVAILABLE" };
     if (!response.ok) {
-      if (response.status === 409 || response.status === 403) {
+      if ([403, 409, 503].includes(response.status)) {
         let errorCode;
         try { errorCode = (await response.json())?.code; } catch { /* Only known codes are read. */ }
         assertIdentity(identity);
@@ -145,6 +156,9 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
         if (errorCode === "ACCOUNT_CHANGED") throw new SpinariumServiceError("ACCOUNT_CHANGED");
         if (errorCode === "PROTECTED_ACCOUNT") throw new SpinariumServiceError("PROTECTED_ACCOUNT");
         if (errorCode === "PUBLICATION_REQUIRED") throw new SpinariumServiceError("PUBLICATION_REQUIRED");
+        if (response.status === 409 && ["DRAFT_NOT_TRASHABLE", "DRAFT_TRASHED", "DRAFT_NOT_TRASHED"].includes(errorCode))
+          throw new SpinariumServiceError(errorCode);
+        if (response.status === 503 && errorCode === "ARTWORK_UNAVAILABLE") throw new SpinariumServiceError("ARTWORK_UNAVAILABLE");
       }
       throw new SpinariumServiceError(failure[response.status] || "BACKEND_ERROR");
     }
@@ -219,10 +233,32 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
         description: veiling.description, artworkUrl: artworkUrl(veiling.artworkUrl), contentStatus: veiling.contentStatus },
     };
   }
-  async function listAdminVeilings({ signal } = {}) {
-    const rows = await request("/admin/veilings", { signal });
+  async function listAdminVeilings({ signal, trashed = false } = {}) {
+    if (typeof trashed !== "boolean") throw new SpinariumServiceError("INVALID_INPUT");
+    const rows = await request(`/admin/veilings${trashed ? "?trashed=true" : ""}`, { signal });
     if (!Array.isArray(rows)) throw new SpinariumServiceError("INVALID_PROJECTION");
-    return rows.map(catalogRow);
+    const catalog = rows.map(catalogRow);
+    if (catalog.some(row => Boolean(row.trashedAt) !== trashed) || new Set(catalog.map(row => row.id)).size !== catalog.length)
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    return catalog;
+  }
+  async function getAdminArtworkStatus({ signal } = {}) {
+    const data = await request("/admin/artwork-status", { signal });
+    if (typeof data?.available !== "boolean" || data.maxBytes !== MAX_ARTWORK_BYTES ||
+      !Array.isArray(data.acceptedTypes) || data.acceptedTypes.length !== IMAGE_TYPES.size ||
+      new Set(data.acceptedTypes).size !== IMAGE_TYPES.size || data.acceptedTypes.some(type => !IMAGE_TYPES.has(type)))
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    return { available: data.available, maxBytes: data.maxBytes, acceptedTypes: [...data.acceptedTypes] };
+  }
+  async function changeDraftTrash(action, { id, revision, signal } = {}) {
+    const selected = requireId(id);
+    if (!Number.isSafeInteger(revision) || revision < 1) throw new SpinariumServiceError("REVISION_REQUIRED");
+    const saved = catalogRow(await request(`/admin/veilings/${selected}/${action}`, {
+      method: "POST", revision, signal,
+    }));
+    if (saved.id !== selected || Boolean(saved.trashedAt) !== (action === "trash"))
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    return saved;
   }
   async function getShowcase({ signal } = {}) {
     const data = await request("/showcase", { signal });
@@ -300,7 +336,8 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
   }
   return Object.freeze({
     configured: !connection.error,
-    getDashboard, getOwnershipDetail, getAdminAccess, getAdminContext, listAdminVeilings, saveVeiling, uploadArtwork,
+    getDashboard, getOwnershipDetail, getAdminAccess, getAdminContext, listAdminVeilings, saveVeiling, uploadArtwork, getAdminArtworkStatus,
+    trashVeiling: input => changeDraftTrash("trash", input), restoreVeiling: input => changeDraftTrash("restore", input),
     getShowcase, getShowcaseVeiling, publishVeiling,
     ...createAdminAccountService({ request, ErrorClass: SpinariumServiceError, origin }),
     getCapabilities: () => ({ authentication: !connection.error, claims: false,

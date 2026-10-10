@@ -120,3 +120,7 @@ For a full return to Pages hosting, detach the production apex Worker route and 
 Auth0 Universal Login was an earlier preparation choice in this session. The owner's later instruction supersedes its dashboard/client-secret/email-verification prerequisites; its earlier local OIDC tests remain historical results. Supabase adapters/schema and [historical guides](history/SPINARIUM-ACCOUNTS-SUPABASE-2026-10-01.md) remain unused groundwork. D1 uses its own SQLite schema and Worker authorization, not PostgreSQL RLS.
 
 Claims remain disabled. The separate registration QR and printed credential must represent the same future one-time secret, independently of the physical serial. Final credential format, issuance, hashing and atomic redemption remain separate work. Games, transfers, mystery purchases and other roadmap features are outside this milestone. No shared InvoHub database credential or integration is configured.
+
+## Prepared draft Trash and artwork readiness
+
+The additive 0006 release adds reversible draft Trash/Restore and explicit private-artwork capability feedback. It has not been activated by this documentation change. Follow the [review and release checklist](SPINARIUM-DRAFT-TRASH.md), including staging first, preserved audit/artwork/ownership data, and separately authorized R2 activation. Do not add hosted R2 bindings until their private buckets exist.

@@ -3,7 +3,7 @@ import { HttpError, json, readBytes, readJson } from './http';
 import type { Env } from './types';
 import { getAdminRole, handleAdminAccounts } from './admin-accounts';
 import { ADMIN_ACTOR_GUARD, adminActorValues } from './admin-authorization';
-import { CATALOG_WITH_PUBLICATION, LEGACY_CATALOG_VISIBLE, PUBLICATION_COLUMN, handleShowcase, publicationOf, publicationProjection,
+import { CATALOG_WITH_PUBLICATION, DRAFT_TRASH_ELIGIBLE, LEGACY_CATALOG_VISIBLE, PUBLICATION_COLUMN, handleShowcase, publicationOf, publicationProjection,
   publishPublication, type CatalogRow } from './showcase';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -104,6 +104,8 @@ function adminProjection(row: CatalogRow) {
     rarity: row.rarity,
     edition: row.edition,
     revision: row.revision,
+    trashedAt: row.trashed_at === null ? null : new Date(row.trashed_at * 1000).toISOString(),
+    canTrash: Boolean(row.can_trash),
     created_at: new Date(row.created_at * 1000).toISOString(),
     updated_at: new Date(row.updated_at * 1000).toISOString(),
     artworkUrl: row.artwork_id ? `/api/artwork/${row.artwork_id}` : null,
@@ -116,12 +118,14 @@ function auditProjection(row: CatalogRow) {
     id: row.id, name: row.name, description: row.description,
     number: row.character_number, status: row.status, rarity: row.rarity,
     edition: row.edition, artworkId: row.artwork_id, revision: row.revision,
+    trashedAt: row.trashed_at, trashedBy: row.trashed_by,
   };
 }
 
-async function catalogRow(env: Env, id: string): Promise<CatalogRow> {
+async function catalogRow(env: Env, id: string, includeTrashed = false): Promise<CatalogRow> {
   const row = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id).first<CatalogRow>();
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'The Veiling was not found.');
+  if (!includeTrashed && row.trashed_at !== null) throw new HttpError(409, 'DRAFT_TRASHED', 'Restore the draft before editing it.');
   return row;
 }
 
@@ -270,7 +274,7 @@ async function updateVeiling(request: Request, env: Env, session: AuthSession, i
     results = await db.batch<CatalogRow>([
       db.prepare(`UPDATE catalog_veilings SET name = ?, description = ?, character_number = ?, status = ?,
         rarity = ?, edition = ?, updated_by = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND revision = ? AND ${ADMIN_ACTOR_GUARD}`)
+        WHERE id = ? AND revision = ? AND trashed_at IS NULL AND ${ADMIN_ACTOR_GUARD}`)
         .bind(input.name, input.description, input.number, input.status, input.rarity, input.edition,
           session.userId, now, id, existing.revision, ...adminActorValues(session)),
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
@@ -309,13 +313,14 @@ async function uploadArtwork(request: Request, env: Env, session: AuthSession, i
   requireCsrf(request, env, session);
   const existing = await catalogRow(env, id);
   requireRevision(request, existing.revision);
+  const bucket = artworkBucket(env);
   const contentType = request.headers.get('content-type') ?? '';
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(contentType)) invalidInput('Choose a PNG, JPEG, or WebP image.');
   const bytes = await readBytes(request, MAX_ARTWORK_BYTES);
   const extension = imageExtension(contentType, bytes);
   const artworkId = crypto.randomUUID();
   const objectKey = `veilings/${id}/${artworkId}.${extension}`;
-  const stored = await env.ARTWORK.put(objectKey, bytes, {
+  const stored = await bucket.put(objectKey, bytes, {
     onlyIf: { etagDoesNotMatch: '*' },
     httpMetadata: { contentType, cacheControl: 'private, no-store' },
   });
@@ -325,7 +330,7 @@ async function uploadArtwork(request: Request, env: Env, session: AuthSession, i
   try {
     results = await db.batch<CatalogRow>([
       db.prepare(`INSERT INTO artwork (id, veiling_id, object_key, content_type, byte_length, created_by, created_at)
-        SELECT ?, id, ?, ?, ?, ?, ? FROM catalog_veilings WHERE id = ? AND revision = ? AND ${ADMIN_ACTOR_GUARD}`)
+        SELECT ?, id, ?, ?, ?, ?, ? FROM catalog_veilings WHERE id = ? AND revision = ? AND trashed_at IS NULL AND ${ADMIN_ACTOR_GUARD}`)
         .bind(artworkId, objectKey, contentType, bytes.byteLength, session.userId, now, id, existing.revision, ...adminActorValues(session)),
       // The successful guarded insert authorizes the rest of this transaction.
       // Re-evaluating time here could leave a partial attachment at expiry.
@@ -345,7 +350,7 @@ async function uploadArtwork(request: Request, env: Env, session: AuthSession, i
   } catch (error) {
     // R2 and D1 cannot share a transaction. Failed attachment removes the new
     // object; a failed cleanup leaves an inaccessible orphan for later upkeep.
-    await env.ARTWORK.delete(objectKey).catch(() => undefined);
+    await bucket.delete(objectKey).catch(() => undefined);
     throw error;
   }
   return json(adminProjection(results[3].results[0] as CatalogRow));
@@ -364,7 +369,7 @@ async function artwork(env: Env, session: AuthSession, id: string): Promise<Resp
       )
     ))`).bind(id, session.userId, session.userId).first<ArtworkRow>();
   if (!row) throw new HttpError(404, 'NOT_FOUND', 'The artwork was not found.');
-  const object = await env.ARTWORK.get(row.object_key);
+  const object = await artworkBucket(env).get(row.object_key);
   if (!object) throw new HttpError(404, 'NOT_FOUND', 'The artwork was not found.');
   return new Response(object.body, { headers: {
     'Content-Type': row.content_type,
@@ -375,16 +380,52 @@ async function artwork(env: Env, session: AuthSession, id: string): Promise<Resp
   } });
 }
 
+function artworkBucket(env: Env): R2Bucket {
+  if (!env.ARTWORK) throw new HttpError(503, 'ARTWORK_UNAVAILABLE', 'Image uploads are unavailable until private artwork storage is configured. Your saved draft is safe.');
+  return env.ARTWORK;
+}
+
+async function changeDraftTrash(request: Request, env: Env, session: AuthSession, id: string, restore: boolean): Promise<Response> {
+  requireCsrf(request, env, session);
+  const existing = await catalogRow(env, id, true);
+  requireRevision(request, existing.revision);
+  if (restore ? existing.trashed_at === null : !existing.can_trash) {
+    throw new HttpError(409, restore ? 'DRAFT_NOT_TRASHED' : existing.trashed_at !== null ? 'DRAFT_TRASHED' : 'DRAFT_NOT_TRASHABLE',
+      restore ? 'This draft is not in Trash. Reload the list.' : 'Only unpublished drafts with no ownership or discovery records can be moved to Trash.');
+  }
+  // No content or identity comes from the body. Keep it bounded and reject it.
+  if ((await readBytes(request, 1024)).byteLength) invalidInput('This request does not accept a body.');
+  const db = env.DB.withSession('first-primary');
+  const now = Math.floor(Date.now() / 1000);
+  const eligibility = restore ? 'v.trashed_at IS NOT NULL' : DRAFT_TRASH_ELIGIBLE;
+  const results = await db.batch<CatalogRow>([
+    db.prepare(`UPDATE catalog_veilings SET trashed_at=?,trashed_by=?,updated_by=?,updated_at=?,revision=revision+1
+      WHERE id=? AND revision=? AND id IN (SELECT v.id FROM catalog_veilings v WHERE ${eligibility}) AND ${ADMIN_ACTOR_GUARD}`)
+      .bind(restore ? null : now, restore ? null : session.userId, session.userId, now, id, existing.revision, ...adminActorValues(session)),
+    db.prepare(`INSERT INTO draft_trash_audit(id,veiling_id,actor_user_id,action,before_json,after_json,created_at)
+      SELECT ?,id,?,?,?,json_set(${AUDIT_JSON},'$.trashedAt',trashed_at,'$.trashedBy',trashed_by),?
+      FROM catalog_veilings WHERE id=? AND changes()=1`)
+      .bind(crypto.randomUUID(), session.userId, restore ? 'restore' : 'trash', JSON.stringify(auditProjection(existing)), now, id),
+    db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id=?`).bind(id),
+  ]);
+  if (results[0].meta.changes !== 1) {
+    await requireSession(request, env);
+    await requireAdmin(env, session);
+    throw new HttpError(409, 'CATALOG_CHANGED', 'The draft changed. Reload before trying again.');
+  }
+  return json(adminProjection(results[2].results[0]));
+}
+
 export async function handleData(request: Request, env: Env): Promise<Response | null> {
   const showcaseResponse = await handleShowcase(request, env);
   if (showcaseResponse) return showcaseResponse;
   const accountResponse = await handleAdminAccounts(request, env);
   if (accountResponse) return accountResponse;
   const path = new URL(request.url).pathname;
-  const veilingMatch = path.match(/^\/api\/admin\/veilings\/([^/]+)(\/artwork|\/publication)?$/);
+  const veilingMatch = path.match(/^\/api\/admin\/veilings\/([^/]+)(\/artwork|\/publication|\/trash|\/restore)?$/);
   const artworkMatch = path.match(/^\/api\/artwork\/([^/]+)$/);
   const ownershipMatch = path.match(/^\/api\/ownerships\/([^/]*)$/);
-  const isKnown = ['/api/dashboard', '/api/admin/access', '/api/admin/veilings'].includes(path) || veilingMatch || artworkMatch || ownershipMatch;
+  const isKnown = ['/api/dashboard', '/api/admin/access', '/api/admin/veilings', '/api/admin/artwork-status'].includes(path) || veilingMatch || artworkMatch || ownershipMatch;
   if (!isKnown) return null;
   const session = await requireSession(request, env);
   if (path === '/api/dashboard') {
@@ -407,9 +448,15 @@ export async function handleData(request: Request, env: Env): Promise<Response |
     return artwork(env, session, artworkMatch[1].toLowerCase());
   }
   await requireAdmin(env, session);
+  if (path === '/api/admin/artwork-status') {
+    if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use GET for this endpoint.');
+    return json({ available: Boolean(env.ARTWORK), maxBytes: MAX_ARTWORK_BYTES, acceptedTypes: ['image/png', 'image/jpeg', 'image/webp'] });
+  }
   if (path === '/api/admin/veilings') {
     if (request.method === 'GET') {
-      const rows = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} ORDER BY v.character_number IS NULL, v.character_number, v.created_at DESC, v.id LIMIT 200`).all<CatalogRow>();
+      const trashed = new URL(request.url).searchParams.get('trashed');
+      if (trashed !== null && !['true', 'false'].includes(trashed)) invalidInput('Choose a valid Trash view.');
+      const rows = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.trashed_at IS ${trashed === 'true' ? 'NOT ' : ''}NULL ORDER BY v.character_number IS NULL, v.character_number, v.created_at DESC, v.id LIMIT 200`).all<CatalogRow>();
       return json(rows.results.map(adminProjection));
     }
     if (request.method === 'POST') return createVeiling(request, env, session);
@@ -417,6 +464,10 @@ export async function handleData(request: Request, env: Env): Promise<Response |
   }
   const id = veilingMatch![1].toLowerCase();
   if (!UUID.test(id)) invalidInput('Select a valid Veiling.');
+  if (veilingMatch![2] === '/trash' || veilingMatch![2] === '/restore') {
+    if (request.method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
+    return changeDraftTrash(request, env, session, id, veilingMatch![2] === '/restore');
+  }
   if (veilingMatch![2] === '/publication') {
     if (request.method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
     return json(adminProjection(await publishPublication(request, env, session, id)));

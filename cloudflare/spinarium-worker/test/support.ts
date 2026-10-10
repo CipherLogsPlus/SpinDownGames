@@ -3,7 +3,7 @@ import { Miniflare, convertV4MiniflareOptions, Response as MiniflareResponse } f
 import type { Env } from "../src/types";
 
 export const origin = "https://spinarium.test";
-export async function createHarness(overrides: Partial<Env> = {}, outbound?: (request: Request) => Promise<Response>) {
+export async function createHarness(overrides: Partial<Env> = {}, outbound?: (request: Request) => Promise<Response>, options: { artwork?: boolean; throughMigration?: string } = {}) {
   const bindings = {
     AUTH_ENABLED: "true", AUTH_PROVIDER: "oidc", SIGNUP_ENABLED: "false", APP_ORIGIN: origin,
     OIDC_ISSUER: "https://identity.test", OIDC_CLIENT_ID: "spinarium-test",
@@ -14,7 +14,7 @@ export async function createHarness(overrides: Partial<Env> = {}, outbound?: (re
     cf: false,
     scriptPath: new URL("../dist/index.js", import.meta.url).pathname,
     compatibilityDate: "2026-10-02", compatibilityFlags: ["nodejs_compat"],
-    d1Databases: { DB: "test-db" }, r2Buckets: ["ARTWORK"],
+    d1Databases: { DB: "test-db" }, r2Buckets: options.artwork === false ? [] : ["ARTWORK"],
     bindings,
     // Every external call must go through a test fixture. No real IdP/network.
     outboundService: async (request) => {
@@ -29,10 +29,11 @@ export async function createHarness(overrides: Partial<Env> = {}, outbound?: (re
   const env = await mf.getBindings<Env>();
   const db = env.DB;
   const r2 = env.ARTWORK;
-  for (const file of ["0001_foundation.sql", "0002_password_accounts.sql", "0003_account_management.sql", "0005_member_showcase.sql"]) {
+  for (const file of ["0001_foundation.sql", "0002_password_accounts.sql", "0003_account_management.sql", "0005_member_showcase.sql", "0006_draft_trash.sql"]) {
     const migration = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
     const statements = migration.split(/;\s*(?:\n|$)/).filter((statement) => statement.trim());
     for (const statement of statements) await db.prepare(statement).run();
+    if (file === options.throughMigration) break;
   }
   return {
     mf, db, r2, env,
