@@ -130,6 +130,9 @@ async function fixture(browser, { hash = "collection?filter=owned", width = 1280
       finally { hold?.markFinished(); }
     }
     if (url.pathname === "/api/admin/access" && request.method() === "GET") return respond({ admin: draftRefresh, role: draftRefresh ? "admin" : null });
+    if (url.pathname === "/api/admin/artwork-status" && request.method() === "GET") return draftRefresh
+      ? respond({ available: true, maxBytes: 8388608, acceptedTypes: ["image/png", "image/jpeg", "image/webp"] })
+      : respond({ code: "ADMIN_REQUIRED" }, 403);
     // This one fixture uses an actual private-draft save to trigger the app's
     // collection refresh. The save never grants or mutates ownership records.
     if (draftRefresh && url.pathname === "/api/admin/veilings") {

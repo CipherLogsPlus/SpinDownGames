@@ -202,6 +202,9 @@ async function createFixture(browser, { scenario = "empty", signedIn = false, si
     if (url.pathname === "/api/dashboard" && method === "GET") return state.expireDashboard ? respond({ error: "UNAUTHORIZED" }, 401) : respond(scenario === "owned" ? ownedSnapshot() : emptySnapshot());
     if (url.pathname === "/api/showcase" && method === "GET") return respond({ schemaVersion: "1", mode: "live", veilings: [] });
     if (url.pathname === "/api/admin/access" && method === "GET") return respond({ admin: state.admin, role: state.actorRole });
+    if (url.pathname === "/api/admin/artwork-status" && method === "GET") return state.admin
+      ? respond({ available: true, maxBytes: 8388608, acceptedTypes: ["image/png", "image/jpeg", "image/webp"] })
+      : respond({ code: "ADMIN_REQUIRED" }, 403);
     if (url.pathname.startsWith("/api/admin/accounts")) {
       if (!state.admin || state.accountDenied) return respond({ code: "ADMIN_REQUIRED", message: "Private account email must not leak" }, 403);
       const detail = (row) => {

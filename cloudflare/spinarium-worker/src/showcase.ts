@@ -15,6 +15,7 @@ export interface CatalogRow {
   id: string; name: string; description: string; character_number: number | null;
   status: 'draft' | 'active' | 'retired'; rarity: string | null; edition: string | null; artwork_id: string | null;
   revision: number; created_by: string; updated_by: string; created_at: number; updated_at: number;
+  trashed_at: number | null; trashed_by: string | null; can_trash: number;
   publication_json?: string | null;
   legacy_content_visible: number;
 }
@@ -31,7 +32,14 @@ export const PUBLICATION_COLUMN = `CASE WHEN p.veiling_id IS NOT NULL THEN ${sna
 export const LEGACY_CATALOG_VISIBLE = `(v.status != 'draft' AND NOT EXISTS (
   SELECT 1 FROM publication_audit history WHERE history.veiling_id=v.id
 ))`;
-export const CATALOG_WITH_PUBLICATION = `SELECT v.*, ${PUBLICATION_COLUMN},
+// Artwork references are preserved, so sharing artwork never requires deletion.
+export const DRAFT_TRASH_ELIGIBLE = `(v.trashed_at IS NULL AND v.status='draft'
+  AND NOT EXISTS(SELECT 1 FROM veiling_publications WHERE veiling_id=v.id)
+  AND NOT EXISTS(SELECT 1 FROM publication_audit WHERE veiling_id=v.id)
+  AND NOT EXISTS(SELECT 1 FROM catalog_audit WHERE veiling_id=v.id AND (json_extract(after_json,'$.status') IN ('active','retired') OR json_extract(before_json,'$.status') IN ('active','retired')))
+  AND NOT EXISTS(SELECT 1 FROM ownerships WHERE veiling_id=v.id)
+  AND NOT EXISTS(SELECT 1 FROM discoveries WHERE veiling_id=v.id))`;
+export const CATALOG_WITH_PUBLICATION = `SELECT v.*, ${PUBLICATION_COLUMN}, ${DRAFT_TRASH_ELIGIBLE} AS can_trash,
   ${LEGACY_CATALOG_VISIBLE} AS legacy_content_visible FROM catalog_veilings v
   LEFT JOIN veiling_publications p ON p.veiling_id=v.id`;
 export function publicationOf(row: { publication_json?: string | null }): PublicationRow | null {
@@ -79,6 +87,7 @@ export async function publishPublication(request: Request, env: Env, session: Au
   const current = await db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id=?`).bind(id).first<CatalogRow>();
   if (!current) throw new HttpError(404, 'NOT_FOUND', 'The Veiling was not found.');
   if (current.revision !== expected) conflict();
+  if (current.trashed_at !== null) throw new HttpError(409, 'DRAFT_TRASHED', 'Restore the draft before publishing it.');
   if (!useDraft && !publicationOf(current))
     throw new HttpError(409, 'PUBLICATION_REQUIRED', 'Approve the saved draft before changing its member visibility.');
   const eventId = crypto.randomUUID();
@@ -96,7 +105,7 @@ export async function publishPublication(request: Request, env: Env, session: Au
   const first = db.prepare(`INSERT INTO publication_audit
     (id,veiling_id,actor_user_id,action,before_json,after_json,catalog_revision,created_at)
     SELECT ?,v.id,?,?,${before},${after},v.revision+1,? FROM catalog_veilings v
-    WHERE v.id=? AND v.revision=? AND ${ADMIN_ACTOR_GUARD}
+    WHERE v.id=? AND v.revision=? AND v.trashed_at IS NULL AND ${ADMIN_ACTOR_GUARD}
       ${!useDraft ? 'AND EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=v.id)' : ''}`)
     .bind(eventId, session.userId, action, ...(visibility === 'private' ? [] : [visibility, releaseDate, now]), now,
       id, expected, ...adminActorValues(session));

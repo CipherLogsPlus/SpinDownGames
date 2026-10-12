@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { hasSavedDraftChanges, publicationPlan, validateStudioArtwork } from "../spinarium/components/veiling-studio.js";
+import { hasSavedDraftChanges, publicationPlan, draftTrashPlan, validateStudioArtwork } from "../spinarium/components/veiling-studio.js";
 
 // Isolated policy/validation checks. No account or publication is created.
 const draft = () => ({
@@ -73,5 +73,24 @@ await test("bad types, empty or oversized files and mismatched image contents ar
   for (const file of [new Blob(["<svg/>"], { type: "image/svg+xml" }), new Blob([], { type: "image/png" }),
     { type: "image/png", size: 8388609 }, new Blob(["not an image"], { type: "image/png" }), new Blob(["RIFF0000FAIL"], { type: "image/webp" })])
     await assert.rejects(validateStudioArtwork(file));
+});
+await test("trash confirmation captures only an eligible saved draft and its exact revision", () => {
+  const row = { ...draft(), status: "draft", publication: null, canTrash: true, trashedAt: null };
+  const plan = draftTrashPlan(row);
+  row.name = "Changed later"; row.revision++;
+  assert.deepEqual(plan, { id: row.id, revision: 4, name: "Saved draft name" });
+  assert(Object.isFrozen(plan));
+});
+await test("unsaved edits, unpublished history and missing server eligibility cannot authorize trash", () => {
+  const row = { ...draft(), status: "draft", publication: null, canTrash: true, trashedAt: null };
+  assert.throws(() => draftTrashPlan(row, true), /Save or discard/);
+  assert.throws(() => draftTrashPlan(null), /Save a draft/);
+  for (const patch of [{ canTrash: false }, { canTrash: undefined }, { status: "active" }, { revision: 0 },
+    { publication: draft().publication }, { trashedAt: "2026-10-10T00:00:00.000Z" }])
+    assert.throws(() => draftTrashPlan({ ...row, ...patch }));
+});
+await test("trashed drafts cannot preview publication even with a retained saved revision", () => {
+  assert.throws(() => publicationPlan({ ...draft(), trashedAt: "2026-10-10T00:00:00.000Z" },
+    { visibility: "public", useSavedDraft: true }), /Restore this draft/);
 });
 console.log(`PASS ${passed} Veiling Studio draft/publication policy checks`);

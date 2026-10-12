@@ -17,7 +17,7 @@ const publication = (overrides = {}) => ({ id: veilingId, name: "Approved member
   updatedAt: "2026-10-03T00:00:00.000Z", ...overrides });
 const catalogRow = (overrides = {}) => ({ id: veilingId, revision: 8, name: "Working draft name",
   description: "Working draft description", character_number: 7, status: "draft", rarity: null,
-  edition: null, artworkUrl: null, publication: { ...publication(), sourceRevision: 3 }, ...overrides });
+  edition: null, artworkUrl: null, canTrash: false, trashedAt: null, publication: { ...publication(), sourceRevision: 3 }, ...overrides });
 const envelope = (veilings = [publication()]) => ({ schemaVersion: "1", mode: "live", veilings });
 const detailEnvelope = (veiling = publication()) => ({ schemaVersion: "1", mode: "live", veiling });
 const json = (data, status = 200) => new Response(JSON.stringify(data), {

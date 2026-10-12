@@ -34,6 +34,10 @@ Upcoming offers **Coming soon** or an optional calendar date. Publishing is alwa
 
 Migration 0005 and the matching Worker/frontend are deployed to staging and production; see [architecture](../docs/SPINARIUM-ARCHITECTURE.md). The cancelled film migration 0004 is not required.
 
+## Prepared draft Trash and artwork readiness
+
+The next reviewed release adds **Trash draft**, a read-only **Trash** filter, and **Restore** for eligible never-published drafts with no ownership/discovery records. Trash retains artwork, history and assigned numbers. It requires additive migration 0006 and matching Worker/frontend deployment; see the [release checklist](../docs/SPINARIUM-DRAFT-TRASH.md). Artwork availability is checked separately so unconfigured storage can be explained before saving a selected image. Hosted R2 remains a separate activation step.
+
 ## Run and verify locally
 
 No frontend build or browser dependency is required:

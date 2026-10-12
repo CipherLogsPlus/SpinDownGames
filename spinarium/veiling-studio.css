@@ -12,6 +12,7 @@
 .studio-library h3, .studio-editor h3 { font-size: 1.3rem; margin: 0; }
 .studio-library-heading { margin-bottom: 20px; }
 .studio-editor-heading { margin-bottom: 12px; }
+.studio-editor-heading h3 { overflow-wrap: anywhere; max-width: 100%; }
 .studio-note, .studio-filter-hint, .studio-empty { color: #b7c4d4; font-size: .8125rem; line-height: 1.65; }
 .studio-note { margin: 10px 0; }
 .studio-empty { margin: 14px 0; }
@@ -49,6 +50,9 @@
 .studio-feedback:empty { min-height: 0; margin: 0; }
 .studio-feedback.is-error { color: #ffd0b8; }
 .studio-visibility { margin-top: 28px; padding-top: 26px; border-top: 1px solid #536b86; }
+.studio-trash-actions { margin-top: 28px; padding-top: 18px; border-top: 1px solid #3b4e64; }
+.studio-trash-name { margin: 0; font-size: 1.15rem; line-height: 1.6; overflow-wrap: anywhere; }
+.veiling-studio input:disabled { color: #aab8c8; cursor: not-allowed; }
 .studio-publication-status { margin: 12px 0 0; color: #e0efff; font-size: .9375rem; font-weight: 500; }
 .studio-upcoming-timing { margin: 20px 0; padding: 18px; border: 1px solid #34475c; border-radius: 4px; background: #101c2a; }
 .studio-upcoming-timing > .studio-field { margin-top: 16px; margin-bottom: 0; }

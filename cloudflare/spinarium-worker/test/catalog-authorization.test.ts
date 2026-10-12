@@ -6,7 +6,7 @@ import { createHarness, seedSession, origin } from './support';
 
 type Harness = Awaited<ReturnType<typeof createHarness>>;
 type Session = Awaited<ReturnType<typeof seedSession>>;
-type Operation = 'create' | 'edit' | 'artwork';
+type Operation = 'create' | 'edit' | 'artwork' | 'trash' | 'restore';
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG2kAAAAASUVORK5CYII=', 'base64');
 
 async function harness(t: TestContext) {
@@ -31,6 +31,14 @@ async function requestFor(h: Harness, admin: Session, operation: Operation) {
   if (operation === 'edit') return new Request(`${origin}/api/admin/veilings/${row.id}`, {
     method: 'PATCH', headers: { ...headers, 'If-Match': '"1"' }, body: JSON.stringify({ name: 'Unauthorized edit' }),
   });
+  if (operation === 'trash' || operation === 'restore') {
+    if (operation === 'restore') assert.equal((await h.fetch(`/api/admin/veilings/${row.id}/trash`, {
+      method: 'POST', headers: { ...admin.headers, 'If-Match': '"1"' },
+    })).status, 200);
+    return new Request(`${origin}/api/admin/veilings/${row.id}/${operation}`, {
+      method: 'POST', headers: { ...admin.headers, 'If-Match': operation === 'restore' ? '"2"' : '"1"' },
+    });
+  }
   // Preserve an existing image as well as cleaning up the rejected replacement.
   const first = await h.fetch(`/api/admin/veilings/${row.id}/artwork`, {
     method: 'POST', headers: { ...admin.headers, 'Content-Type': 'image/png', 'If-Match': '"1"' }, body: png,
@@ -42,7 +50,7 @@ async function requestFor(h: Harness, admin: Session, operation: Operation) {
 }
 
 async function catalogState(h: Harness) {
-  const tables = await Promise.all(['catalog_veilings', 'catalog_audit', 'artwork', 'publication_audit', 'veiling_publications']
+  const tables = await Promise.all(['catalog_veilings', 'catalog_audit', 'artwork', 'publication_audit', 'veiling_publications', 'draft_trash_audit']
     .map(async table => (await h.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()).results));
   return { tables, objects: (await h.r2.list()).objects.map(object => object.key).sort() };
 }
@@ -77,7 +85,7 @@ function statusIs(status: number) {
 test('every catalog mutation rechecks the exact session and live authority in its transaction', async t => {
   const h = await harness(t);
   const owner = await seedSession(h.db, { owner: true });
-  for (const operation of ['create', 'edit', 'artwork'] as const) {
+  for (const operation of ['create', 'edit', 'artwork', 'trash', 'restore'] as const) {
     for (const change of ['logout', 'revoke-sessions', 'password-reset', 'expiry', 'disabled', 'role'] as const) {
       await t.test(`${operation}: ${change}`, async () => {
         const admin = await seedSession(h.db, { admin: true, email: `${crypto.randomUUID()}@fixture.test` });
