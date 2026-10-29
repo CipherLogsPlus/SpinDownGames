@@ -56,6 +56,19 @@ jobs:
           grep -q 'signupEnabled' /tmp/config.js
           echo "PASS Spinarium account config available"
 
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /tmp/deletion-studio.js "$BASE/spinarium/components/veiling-studio.js?release=20261029-delete"
+          grep -q 'Yes, delete Veiling' /tmp/deletion-studio.js
+          grep -q 'Unpublish this Veiling before deleting it' /tmp/deletion-studio.js
+          echo "PASS live Studio exposes confirmed deletion with unpublish prerequisite"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /tmp/deletion-style.css "$BASE/spinarium/veiling-studio.css?release=20261029-delete"
+          grep -q 'studio-delete-dialog' /tmp/deletion-style.css
+          echo "PASS live Studio deletion styling published"
+          STATUS=$(curl --silent --show-error --output /tmp/delete-unauthorized.json --write-out '%{http_code}' -X DELETE "$BASE/api/admin/veilings/00000000-0000-4000-8000-000000000000")
+          test "$STATUS" = 401
+          python3 -c 'import json; assert json.load(open("/tmp/delete-unauthorized.json"))["code"] == "UNAUTHORIZED"'
+          echo "PASS live deletion endpoint rejects unauthenticated calls"
+
+
           curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /tmp/studio.html "$BASE/spinarium/"
           grep -q 'Create a Veiling in two steps' /tmp/studio.html
           echo "PASS Veiling Studio HTML has redesigned introduction"
