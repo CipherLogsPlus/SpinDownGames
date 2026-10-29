@@ -121,7 +121,7 @@ function auditProjection(row: CatalogRow) {
 
 async function catalogRow(env: Env, id: string): Promise<CatalogRow> {
   const row = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id = ?`).bind(id).first<CatalogRow>();
-  if (!row) throw new HttpError(404, 'NOT_FOUND', 'The Veiling was not found.');
+  if (!row || row.deleted_at !== null) throw new HttpError(404, 'NOT_FOUND', 'The Veiling was not found.');
   return row;
 }
 
@@ -258,6 +258,33 @@ async function createVeiling(request: Request, env: Env, session: AuthSession): 
   return json(adminProjection(results![2].results[0] as CatalogRow), 201);
 }
 
+async function deleteVeiling(request: Request, env: Env, session: AuthSession, id: string): Promise<Response> {
+  const db = env.DB.withSession('first-primary');
+  requireCsrf(request, env, session);
+  const current = await catalogRow(env, id);
+  requireRevision(request, current.revision);
+  if (current.publication_json || current.status !== 'draft')
+    throw new HttpError(409, 'UNPUBLISH_FIRST', 'Unpublish this Veiling before deleting it.');
+  const now = Math.floor(Date.now() / 1000);
+  // Transactional tombstone and immutable audit. Existing owners keep their
+  // ownership records and original private artwork is never purged.
+  const results = await db.batch([
+    db.prepare(`UPDATE catalog_veilings
+      SET deleted_at=?, deleted_by=?, updated_by=?, updated_at=?,
+        character_number=NULL, revision=revision+1
+      WHERE id=? AND revision=? AND deleted_at IS NULL AND status='draft'
+        AND NOT EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=catalog_veilings.id)
+        AND ${ADMIN_ACTOR_GUARD}`)
+      .bind(now, session.userId, session.userId, now, id, current.revision, ...adminActorValues(session)),
+    db.prepare(`INSERT INTO veiling_deletion_audit(id, veiling_id, actor_user_id, before_json, created_at)
+      SELECT ?,id,?,?,? FROM catalog_veilings WHERE id=? AND changes()=1`)
+      .bind(crypto.randomUUID(), session.userId, JSON.stringify(auditProjection(current)), now, id),
+  ]);
+  if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1)
+    throw new HttpError(409, 'CATALOG_CHANGED', 'The Veiling changed. Reload before deleting.');
+  return json({ id, deleted: true });
+}
+
 async function updateVeiling(request: Request, env: Env, session: AuthSession, id: string): Promise<Response> {
   const db = env.DB.withSession('first-primary');
   requireCsrf(request, env, session);
@@ -270,7 +297,7 @@ async function updateVeiling(request: Request, env: Env, session: AuthSession, i
     results = await db.batch<CatalogRow>([
       db.prepare(`UPDATE catalog_veilings SET name = ?, description = ?, character_number = ?, status = ?,
         rarity = ?, edition = ?, updated_by = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND revision = ? AND ${ADMIN_ACTOR_GUARD}`)
+        WHERE id = ? AND revision = ? AND deleted_at IS NULL AND ${ADMIN_ACTOR_GUARD}`)
         .bind(input.name, input.description, input.number, input.status, input.rarity, input.edition,
           session.userId, now, id, existing.revision, ...adminActorValues(session)),
       db.prepare(`INSERT INTO catalog_audit (id, veiling_id, actor_user_id, action, before_json, after_json, created_at)
@@ -325,7 +352,7 @@ async function uploadArtwork(request: Request, env: Env, session: AuthSession, i
   try {
     results = await db.batch<CatalogRow>([
       db.prepare(`INSERT INTO artwork (id, veiling_id, object_key, content_type, byte_length, created_by, created_at)
-        SELECT ?, id, ?, ?, ?, ?, ? FROM catalog_veilings WHERE id = ? AND revision = ? AND ${ADMIN_ACTOR_GUARD}`)
+        SELECT ?, id, ?, ?, ?, ?, ? FROM catalog_veilings WHERE id = ? AND revision = ? AND deleted_at IS NULL AND ${ADMIN_ACTOR_GUARD}`)
         .bind(artworkId, objectKey, contentType, bytes.byteLength, session.userId, now, id, existing.revision, ...adminActorValues(session)),
       // The successful guarded insert authorizes the rest of this transaction.
       // Re-evaluating time here could leave a partial attachment at expiry.
@@ -409,7 +436,7 @@ export async function handleData(request: Request, env: Env): Promise<Response |
   await requireAdmin(env, session);
   if (path === '/api/admin/veilings') {
     if (request.method === 'GET') {
-      const rows = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} ORDER BY v.character_number IS NULL, v.character_number, v.created_at DESC, v.id LIMIT 200`).all<CatalogRow>();
+      const rows = await env.DB.withSession('first-primary').prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.deleted_at IS NULL ORDER BY v.character_number IS NULL, v.character_number, v.created_at DESC, v.id LIMIT 200`).all<CatalogRow>();
       return json(rows.results.map(adminProjection));
     }
     if (request.method === 'POST') return createVeiling(request, env, session);
@@ -425,6 +452,7 @@ export async function handleData(request: Request, env: Env): Promise<Response |
     if (request.method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
     return uploadArtwork(request, env, session, id);
   }
-  if (request.method !== 'PATCH') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use PATCH for this endpoint.');
+  if (request.method === 'DELETE') return deleteVeiling(request, env, session, id);
+  if (request.method !== 'PATCH') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Use PATCH or DELETE for this endpoint.');
   return updateVeiling(request, env, session, id);
 }
