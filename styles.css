@@ -733,6 +733,9 @@ h1 > span {
 .events-list {
   min-width: 0;
 }
+.upcoming-events > .event-card + .event-card {
+  margin-top: 1rem;
+}
 .events-copy .eyebrow {
   margin-bottom: 1.4rem;
 }

@@ -303,21 +303,26 @@
                 on Instagram (opens in a new tab)</span
               ></a
             >
-            <div class="next-event">
-              <span class="status-dot" aria-hidden="true"></span>
+            <div class="next-event" id="next-event-status" role="status" aria-live="polite">
               <div>
-                <strong>Next event · October 17–18, 2026</strong
-                ><span>Trainer’s Bazaar · Brunswick, Ohio</span>
+                <strong>No upcoming events announced.</strong>
+                <span>Check back soon or follow our event updates.</span>
               </div>
             </div>
           </div>
           <div class="events-list">
+            <div class="upcoming-events" id="upcoming-events" role="region" aria-label="Upcoming events"></div>
+            <details class="past-events" data-event-start="2026-10-17" data-event-end="2026-10-18">
+              <summary>
+                Past event · October 17–18, 2026
+                <span aria-hidden="true">+</span>
+              </summary>
             <article
-              class="event-card upcoming-event"
+              class="event-card"
               aria-labelledby="next-event-name"
             >
               <div class="event-card-top">
-                <span class="eyebrow">Next event</span>
+                <span class="eyebrow">From the event archive</span>
                 <span class="pill">FREE ADMISSION</span>
               </div>
               <div class="event-main">
@@ -383,7 +388,8 @@
                 />
               </details>
             </article>
-            <details class="past-events">
+            </details>
+            <details class="past-events" data-event-start="2026-09-19" data-event-end="2026-09-19">
               <summary>
                 Past event · September 19, 2026
                 <span aria-hidden="true">+</span>
