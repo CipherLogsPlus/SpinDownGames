@@ -79,3 +79,43 @@
   .studio-optional-fields { grid-template-columns: minmax(0, 1fr); }
   .studio-optional-fields > :first-child { grid-column: auto; }
 }
+
+/* Focused create-first workspace. The smaller library stays accessible,
+   while the active editor gets the main visual hierarchy. */
+.veiling-studio { margin-top: 18px; }
+.studio-layout { grid-template-columns: minmax(0, 1.5fr) minmax(265px, .9fr); gap: 20px; }
+.studio-editor, .studio-library { border-radius: 12px; }
+.studio-editor { padding: clamp(20px, 3vw, 32px); border-color: #4c6480; background: linear-gradient(160deg, #122035 0%, #0b141f 36%, #0a111a 100%); }
+.studio-library { background: #0d1621; }
+.studio-step-label { margin: 0 0 10px; color: #b1d2fc; letter-spacing: .14em; font-size: .72rem; font-weight: 700; }
+.studio-editor-intro { max-width: 55ch; margin: 10px 0 22px; line-height: 1.7; color: #bfd0e0; font-size: .9rem; }
+.studio-editor-heading { gap: 12px; }
+.studio-editor-heading h3 { font-size: clamp(1.45rem, 2.2vw, 1.9rem); }
+.studio-essentials { margin: 20px 0 8px; }
+.studio-essentials .studio-field label { font-weight: 650; }
+.studio-essentials .studio-field:first-child input { font-size: 1rem; min-height: 50px; }
+.studio-essentials textarea { min-height: 115px; }
+.studio-optional-details { border: 1px solid #30465e; border-radius: 8px; padding: 0 14px; background: #0c1723; }
+.studio-optional-details summary { font-weight: 600; }
+.studio-optional-details[open] { padding-bottom: 12px; }
+.studio-editor-actions { margin-top: 8px; }
+.studio-editor-actions > button:first-child { flex: 2 1 220px; }
+.studio-visibility { margin-top: 28px; padding: 24px; border: 1px solid #35516b; border-radius: 10px; background: #111f30; }
+.studio-visibility h3 { font-size: 1.2rem; }
+.studio-visibility .studio-note { line-height: 1.6; }
+.studio-list-item { border-radius: 8px; transition: border-color .15s ease, background .15s ease; }
+.studio-list-item:hover:not(:disabled) { border-color: #7eacd9; }
+.studio-badge { border-radius: 999px; }
+.studio-toolbar { padding: 0 0 4px; }
+#studio-start { margin-top: 10px; }
+@media (max-width: 1000px) {
+  .studio-layout { grid-template-columns: minmax(0, 1fr); }
+  .studio-library { order: 2; }
+  .studio-editor { order: 1; }
+  .studio-visibility { padding: 20px; }
+}
+@media (max-width: 640px) {
+  .studio-editor, .studio-library { padding: 18px; }
+  .studio-editor-intro { font-size: .875rem; }
+  .studio-visibility { padding: 16px; }
+}
