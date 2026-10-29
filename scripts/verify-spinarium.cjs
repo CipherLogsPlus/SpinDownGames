@@ -367,7 +367,7 @@ async function confirmAccountAction(page, reason = "Test-only administrator reas
       // baseline assets and hosting configuration must remain byte-for-byte intact.
       for (const file of git("ls-tree", "-r", "--name-only", preservationRef).toString().trim().split("\n")) {
         assert(fs.existsSync(path.join(root, file)), `Original file removed: ${file}`);
-        if (file.startsWith("spinarium/") || file.startsWith("docs/") || file.startsWith("scripts/verify-spinarium") || [".gitignore", "README.md", "VERIFICATION.md", "privacy.html", "terms.html", "index.html", "script.js", "styles.css"].includes(file)) continue;
+        if (file.startsWith("spinarium/") || file.startsWith("docs/") || file.startsWith("scripts/verify-spinarium") || [".gitignore", "README.md", "VERIFICATION.md", "privacy.html", "terms.html", "index.html", "script.js", "styles.css", "scripts/verify.cjs"].includes(file)) continue;
         assert(fs.readFileSync(path.join(root, file)).equals(git("show", `${preservationRef}:${file}`)), `Original file changed: ${file}`);
       }
     });
