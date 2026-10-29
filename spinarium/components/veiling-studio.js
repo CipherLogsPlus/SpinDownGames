@@ -289,8 +289,9 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
   function renderVisibility(state) {
     const { ui, selected } = state;
     const panel = el("section", "studio-visibility");
+    panel.setAttribute("aria-label", "Publishing and member visibility");
     panel.id = "studio-visibility-panel";
-    const heading = el("h3", "", "Member visibility");
+    const heading = el("h3", "", "Step 2 · Share with members");
     heading.id = "studio-visibility-title";
     panel.setAttribute("aria-labelledby", heading.id);
     panel.append(heading, el("p", "studio-publication-status", selected ? visibilityName(selected) : "Draft not saved"));
@@ -334,15 +335,19 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     const { ui } = state;
     ui.editor.replaceChildren();
     const heading = el("div", "studio-editor-heading");
-    heading.append(el("h3", "", state.selected ? "Draft editor" : "Create a Veiling"));
+    heading.append(el("h3", "", state.selected ? "Edit your Veiling" : "Create a Veiling"));
     ui.draftState = el("span", "studio-badge"); heading.append(ui.draftState);
-    ui.editor.append(heading, el("p", "studio-note", "A name is enough to start. Add a description, details, and artwork whenever they are ready."));
+    ui.editor.append(
+      el("p", "studio-step-label", "STEP 1 · CREATE"),
+      heading,
+      el("p", "studio-editor-intro", "Start with a name. Add artwork and a story when you're ready; save privately before deciding what to share."),
+    );
     ui.form = el("form"); ui.form.id = "studio-editor-form";
     ui.fieldset = el("fieldset", "studio-fields");
     const legend = el("legend", "sr-only", "Draft content"); ui.fieldset.append(legend);
     const saved = draftFields(state.selected);
     const name = field("Veiling name", "studio-name", { value: saved.name, maxLength: 120, required: true });
-    const description = field("Description / lore (optional)", "studio-description", { value: saved.description, maxLength: 20000, rows: 6 });
+    const description = field("Description or story (optional)", "studio-description", { value: saved.description, maxLength: 20000, rows: 4 });
     const number = field("Character number (optional)", "studio-number", { value: saved.number, type: "number" });
     number.input.min = "1"; number.input.max = "999999"; number.input.step = "1";
     const rarity = field("Rarity (optional)", "studio-rarity", { value: saved.rarity, maxLength: 80 });
@@ -352,8 +357,8 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     details.open = Boolean(saved.number || saved.rarity || saved.edition);
     const optionalFields = el("div", "studio-optional-fields");
     optionalFields.append(number.wrapper, rarity.wrapper, edition.wrapper);
-    details.append(el("summary", "", "Optional details"), optionalFields);
-    const art = field("Draft artwork (optional)", "studio-artwork", { type: "file" });
+    details.append(el("summary", "", "More card details · number, rarity & edition"), optionalFields);
+    const art = field("Artwork (optional)", "studio-artwork", { type: "file" });
     ui.file = art.input; ui.file.accept = "image/png,image/jpeg,image/webp";
     const artHint = el("p", "studio-note", "PNG, JPEG or WebP · up to 8 MB. Artwork is saved to the draft first.");
     artHint.id = "studio-artwork-hint"; ui.file.setAttribute("aria-describedby", artHint.id);
@@ -365,8 +370,11 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
       announce(state, "Selected artwork cleared. Existing saved artwork is unchanged.");
     });
     art.wrapper.append(ui.clearFile);
-    ui.fieldset.append(name.wrapper, description.wrapper, details, art.wrapper);
+    const essentials = el("div", "studio-essentials");
+    essentials.append(name.wrapper, art.wrapper, description.wrapper);
+    ui.fieldset.append(essentials, details);
     const actions = el("div", "studio-editor-actions");
+    actions.setAttribute("aria-label", "Save this Veiling's private draft");
     ui.save = button("Save Draft", "studio-save", "outlined-button studio-primary"); ui.save.type = "submit";
     ui.discard = button("Discard changes", "studio-discard");
     ui.discard.addEventListener("click", () => {
@@ -528,16 +536,16 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     current = state;
     const ui = state.ui;
     const toolbar = el("div", "studio-toolbar");
-    toolbar.append(el("p", "studio-note", "Create privately, then choose exactly what members see."));
-    ui.create = button("Create Veiling", "studio-create", "outlined-button studio-primary");
+    toolbar.append(el("p", "studio-note", "A clear path from first idea to published Veiling. Nothing is public until you confirm."));
+    ui.create = button("+ New Veiling", "studio-create", "outlined-button studio-primary");
     ui.create.addEventListener("click", () => select(state, null)); toolbar.append(ui.create);
     const layout = el("div", "studio-layout");
     const library = el("section", "studio-library"); library.setAttribute("aria-labelledby", "studio-created-title");
     const libraryHeading = el("div", "studio-library-heading");
-    const title = el("h3", "", "Created Veilings"); title.id = "studio-created-title";
+    const title = el("h3", "", "Your Veilings"); title.id = "studio-created-title";
     ui.count = el("span", "studio-note"); libraryHeading.append(title, ui.count);
     const search = field("Search created Veilings", "studio-search", { type: "search", maxLength: 150 }); ui.search = search.input;
-    ui.search.placeholder = "Name, number, or ID";
+    ui.search.placeholder = "Find a Veiling…";
     ui.search.addEventListener("input", () => { state.search = ui.search.value; renderList(state); });
     const filters = el("div", "studio-filters"); filters.setAttribute("role", "group"); filters.setAttribute("aria-label", "Filter created Veilings");
     ui.filters = [];
@@ -548,10 +556,14 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     }
     ui.list = el("div", "studio-list"); ui.list.id = "studio-list";
     ui.listFeedback = feedback("studio-list-feedback");
-    library.append(libraryHeading, search.wrapper, filters, el("p", "studio-filter-hint", "Drafts includes unpublished Veilings and saved changes waiting to publish."), ui.listFeedback, ui.list);
+    library.append(libraryHeading, search.wrapper, filters, el("p", "studio-filter-hint", "Drafts includes unpublished work and updates that are not yet published."), ui.listFeedback, ui.list);
     ui.editor = el("section", "studio-editor"); ui.editor.id = "studio-editor";
-    ui.editor.append(el("h3", "", "Your next Veiling starts here"), el("p", "studio-empty", "Create a Veiling or select one from the list to work on its draft."));
-    layout.append(library, ui.editor);
+    ui.editor.append(el("p", "studio-step-label", "YOUR CREATIVE WORKSPACE"), el("h3", "", "Bring your next Veiling to life"),
+      el("p", "studio-editor-intro", "Give it a name, add artwork and a story, then save a private draft. You can fill in the rest later."));
+    const startButton = button("Start a new Veiling", "studio-start", "outlined-button studio-primary");
+    startButton.addEventListener("click", () => select(state, null));
+    ui.editor.append(startButton);
+    layout.append(ui.editor, library);
     ui.dialog = el("dialog", "modal studio-publish-dialog"); ui.dialog.id = "studio-publish-dialog";
     ui.dialog.setAttribute("aria-labelledby", "studio-preview-title");
     ui.previewTitle = el("h3"); ui.previewTitle.id = "studio-preview-title";
