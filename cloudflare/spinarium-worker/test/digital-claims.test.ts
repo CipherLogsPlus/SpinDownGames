@@ -137,9 +137,9 @@ test('each new code is random, can mint one duplicate, and does not establish a 
 test('wrong Veiling, draft and member-visible publication cannot issue private pilot codes', async t => {
   const h = await harness(t);
   const owner = await seedSession(h.db, { owner: true });
-  const incorrect = await createAshenling(h, owner, { name: 'Not Ashenling' });
+  const incorrect = await createAshenling(h, owner, { name: 'Not Ashenling', number: 2 });
   assert.equal((await issue(h, owner, incorrect)).status, 409);
-  const draft = await createAshenling(h, owner, { name: 'Ashenling Draft', number: 2, status: 'draft' });
+  const draft = await createAshenling(h, owner, { name: 'Ashenling Draft', number: 3, status: 'draft' });
   assert.equal((await issue(h, owner, draft)).status, 409);
   const id = await createAshenling(h, owner);
   await h.db.prepare(`INSERT INTO veiling_publications
