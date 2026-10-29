@@ -1,5 +1,6 @@
 import { handleAuth } from "./auth";
 import { handleData } from "./data";
+import { handleDigitalClaims } from "./digital-claims";
 import { HttpError, json } from "./http";
 import type { Env } from "./types";
 
@@ -8,7 +9,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/api/health" && request.method === "GET")
-        return json({ service: "spinarium", accountsEnabled: env.AUTH_ENABLED === "true", claimsEnabled: false });
+        return json({ service: "spinarium", accountsEnabled: env.AUTH_ENABLED === "true", claimsEnabled: env.CLAIMS_ENABLED === "true" });
       if (!url.pathname.startsWith("/api/"))
         throw new HttpError(404, "NOT_FOUND", "This endpoint does not exist.");
       // A cookie is useful only on the explicitly configured HTTPS origin.
@@ -17,7 +18,9 @@ export default {
         throw new HttpError(503, "ACCOUNTS_DISABLED", "Real accounts are not enabled yet.");
       if (!env.APP_ORIGIN || url.origin !== env.APP_ORIGIN)
         throw new HttpError(403, "ORIGIN_DENIED", "Use the configured Spinarium origin.");
-      const response = await handleAuth(request, env) ?? await handleData(request, env);
+      const response = await handleAuth(request, env)
+        ?? (env.CLAIMS_ENABLED === "true" ? await handleDigitalClaims(request, env) : null)
+        ?? await handleData(request, env);
       return response ?? json({ code: "NOT_FOUND", message: "This endpoint does not exist." }, 404);
     } catch (error) {
       if (error instanceof HttpError)
