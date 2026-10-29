@@ -31,6 +31,7 @@ const MESSAGES = Object.freeze({
   ACCOUNT_CHANGED: "This account has changed. Review its current details and confirm the action again.",
   PROTECTED_ACCOUNT: "This account is protected from that action.",
   PUBLICATION_REQUIRED: "This Veiling is private. Publish its saved draft first.",
+  UNPUBLISH_FIRST: "Unpublish this Veiling before deleting it.",
 });
 export class SpinariumServiceError extends Error {
   constructor(code) {
@@ -145,6 +146,7 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
         if (errorCode === "ACCOUNT_CHANGED") throw new SpinariumServiceError("ACCOUNT_CHANGED");
         if (errorCode === "PROTECTED_ACCOUNT") throw new SpinariumServiceError("PROTECTED_ACCOUNT");
         if (errorCode === "PUBLICATION_REQUIRED") throw new SpinariumServiceError("PUBLICATION_REQUIRED");
+        if (errorCode === "UNPUBLISH_FIRST") throw new SpinariumServiceError("UNPUBLISH_FIRST");
       }
       throw new SpinariumServiceError(failure[response.status] || "BACKEND_ERROR");
     }
@@ -275,6 +277,18 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
     if (id && saved.id.toLowerCase() !== id) throw new SpinariumServiceError("INVALID_PROJECTION");
     return saved;
   }
+  async function deleteVeiling({ id, revision } = {}) {
+    const selected = requireId(id);
+    if (!Number.isSafeInteger(revision) || revision < 1)
+      throw new SpinariumServiceError("REVISION_REQUIRED");
+    const identity = captureIdentity();
+    const result = await request(`/admin/veilings/${selected}`, {
+      method: "DELETE", body: {}, revision, identity,
+    });
+    if (!result || result.deleted !== true || result.id !== selected)
+      throw new SpinariumServiceError("INVALID_PROJECTION");
+    return true;
+  }
   async function uploadArtwork({ veilingId, file, revision } = {}) {
     const identity = captureIdentity();
     const id = requireId(veilingId);
@@ -300,7 +314,7 @@ export function createSpinariumService(config, auth, { fetchImpl = globalThis.fe
   }
   return Object.freeze({
     configured: !connection.error,
-    getDashboard, getOwnershipDetail, getAdminAccess, getAdminContext, listAdminVeilings, saveVeiling, uploadArtwork,
+    getDashboard, getOwnershipDetail, getAdminAccess, getAdminContext, listAdminVeilings, saveVeiling, deleteVeiling, uploadArtwork,
     getShowcase, getShowcaseVeiling, publishVeiling,
     ...createAdminAccountService({ request, ErrorClass: SpinariumServiceError, origin }),
     getCapabilities: () => ({ authentication: !connection.error, claims: false,
