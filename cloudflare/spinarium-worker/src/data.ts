@@ -263,7 +263,7 @@ async function deleteVeiling(request: Request, env: Env, session: AuthSession, i
   requireCsrf(request, env, session);
   const current = await catalogRow(env, id);
   requireRevision(request, current.revision);
-  if (current.publication_json || current.status !== 'draft')
+  if (current.publication_json)
     throw new HttpError(409, 'UNPUBLISH_FIRST', 'Unpublish this Veiling before deleting it.');
   const now = Math.floor(Date.now() / 1000);
   // Transactional tombstone and immutable audit. Existing owners keep their
@@ -271,8 +271,8 @@ async function deleteVeiling(request: Request, env: Env, session: AuthSession, i
   const results = await db.batch([
     db.prepare(`UPDATE catalog_veilings
       SET deleted_at=?, deleted_by=?, updated_by=?, updated_at=?,
-        character_number=NULL, revision=revision+1
-      WHERE id=? AND revision=? AND deleted_at IS NULL AND status='draft'
+        character_number=NULL, status='retired', revision=revision+1
+      WHERE id=? AND revision=? AND deleted_at IS NULL
         AND NOT EXISTS(SELECT 1 FROM veiling_publications p WHERE p.veiling_id=catalog_veilings.id)
         AND ${ADMIN_ACTOR_GUARD}`)
       .bind(now, session.userId, session.userId, now, id, current.revision, ...adminActorValues(session)),
