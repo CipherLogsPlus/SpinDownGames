@@ -62,6 +62,112 @@
       location.append(document.createElement("br"), link);
     });
 
+
+  // Archive an event after its final day, based on the event's local Ohio date.
+  // Each .past-events wrapper owns the original event article and its start/end dates.
+  // Markup defaults to an accessible archive even if JavaScript is unavailable.
+  const eventList = document.querySelector(".events-list");
+  const featuredEvents = document.querySelector("#upcoming-events");
+  const eventStatus = document.querySelector("#next-event-status");
+  const ohioDate = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const fullDate = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const records = [...eventList.querySelectorAll(".past-events[data-event-start][data-event-end]")]
+    .map((archive) => {
+      const article = archive.querySelector(".event-card");
+      if (!article) return null;
+      const eyebrow = article.querySelector(".event-card-top .eyebrow");
+      const pill = article.querySelector(".event-card-top .pill");
+      return {
+        archive,
+        article,
+        start: archive.dataset.eventStart,
+        end: archive.dataset.eventEnd,
+        eyebrow,
+        originalEyebrow: eyebrow?.textContent,
+        pill,
+        originalPill: pill?.textContent,
+      };
+    })
+    .filter(Boolean);
+
+  function todayInOhio() {
+    const date = Object.fromEntries(
+      ohioDate.formatToParts(new Date()).map(({ type, value }) => [type, value]),
+    );
+    return `${date.year}-${date.month}-${date.day}`;
+  }
+
+  function dateLabel(start, end) {
+    const first = new Date(`${start}T12:00:00Z`);
+    const last = new Date(`${end}T12:00:00Z`);
+    if (start === end) return fullDate.format(first);
+    if (start.slice(0, 7) === end.slice(0, 7)) {
+      const month = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long" }).format(first);
+      return `${month} ${first.getUTCDate()}–${last.getUTCDate()}, ${first.getUTCFullYear()}`;
+    }
+    return `${fullDate.format(first)} – ${fullDate.format(last)}`;
+  }
+
+  function updateEventDisplay() {
+    const today = todayInOhio();
+    const scheduled = records
+      .filter(({ start, end }) => /^\\d{4}-\\d{2}-\\d{2}$/.test(start) &&
+        /^\\d{4}-\\d{2}-\\d{2}$/.test(end) && start <= end && end >= today)
+      .sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+
+    for (const record of records) {
+      const isUpcoming = scheduled.includes(record);
+      record.archive.hidden = isUpcoming;
+      if (!isUpcoming) {
+        if (record.article.parentElement !== record.archive)
+          record.archive.append(record.article);
+        if (record.eyebrow) record.eyebrow.textContent = record.originalEyebrow;
+        if (record.pill) record.pill.textContent = record.originalPill;
+      }
+    }
+    scheduled.forEach((record, index) => {
+      if (featuredEvents.children[index] !== record.article)
+        featuredEvents.insertBefore(record.article, featuredEvents.children[index] || null);
+      if (record.eyebrow) record.eyebrow.textContent = index === 0 ? "Next event" : "Upcoming event";
+      if (record.pill && record.originalPill?.trim() === "PAST EVENT")
+        record.pill.textContent = "EVENT DETAILS";
+    });
+    const byMostRecent = [...records].sort((a, b) => b.end.localeCompare(a.end));
+    byMostRecent.forEach((record, index) => {
+      if (eventList.children[index + 1] !== record.archive)
+        eventList.insertBefore(record.archive, eventList.children[index + 1] || null);
+    });
+    const title = eventStatus.querySelector("strong");
+    const subtitle = eventStatus.querySelector("div > span");
+    if (!scheduled.length) {
+      title.textContent = "No upcoming events announced.";
+      subtitle.textContent = "Check back soon or follow our event updates.";
+      return;
+    }
+    const next = scheduled[0];
+    const name = next.article.querySelector(".event-main h3")?.textContent.replace(/\\s+/g, " ").trim() || "Upcoming event";
+    const venue = next.article.querySelector(".event-location strong")?.textContent.trim();
+    title.textContent = `Next event · ${dateLabel(next.start, next.end)}`;
+    subtitle.textContent = venue ? `${name} · ${venue}` : name;
+  }
+  updateEventDisplay();
+  // Refresh across midnight and when returning to a tab without a reload.
+  window.setInterval(updateEventDisplay, 60_000);
+  window.addEventListener("focus", updateEventDisplay);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) updateEventDisplay();
+  });
+
   const button = document.querySelector("#roll-button");
   const options = document.querySelector(".dice-options");
   const panel = document.querySelector("#dice-panel");
