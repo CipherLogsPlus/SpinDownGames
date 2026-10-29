@@ -65,7 +65,7 @@ jobs:
           echo "PASS live Studio deletion styling published"
           STATUS=$(curl --silent --show-error --output /tmp/delete-unauthorized.json --write-out '%{http_code}' -X DELETE "$BASE/api/admin/veilings/00000000-0000-4000-8000-000000000000")
           test "$STATUS" = 401
-          python3 -c 'import json; assert json.load(open("/tmp/delete-unauthorized.json"))["code"] == "UNAUTHORIZED"'
+          python3 -c 'import json; assert json.load(open("/tmp/delete-unauthorized.json"))["code"] == "AUTH_REQUIRED"'
           echo "PASS live deletion endpoint rejects unauthenticated calls"
 
 
