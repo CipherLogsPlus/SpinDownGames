@@ -1,4 +1,5 @@
 import { icon } from "./icons.js";
+import { veilingArtwork } from "./veiling-artwork.js";
 import { getDashboardStats, getVeilingDetail } from "../domain/collection.js";
 
 // Service strings are always text nodes. Only trusted component structure is markup.
@@ -125,8 +126,8 @@ export function renderCollection(entries, selectedId) {
         accents[entry.rarity.accent] || "#7da8b1",
       );
     const art = el("div", "card-art");
-    if (entry.status !== "undiscovered" && entry.thumbnail)
-      art.append(image(entry.thumbnail, "", "", true));
+    if (entry.status !== "undiscovered" && !entry.unavailable && entry.veiling.name)
+      art.append(veilingArtwork(entry.thumbnail, entry.displayName, "", true));
     const caption = el("span", "card-caption");
     caption.append(
       el("span", "card-number", number(entry.number)),
@@ -233,15 +234,8 @@ export function renderDetail(detail) {
   }
   const main = el("div", "detail-main");
   const portrait = el("div", "detail-portrait");
-  if (detail.colorArt)
-    portrait.append(
-      image(
-        detail.colorArt,
-        `Full-color artwork for ${detail.displayName}`,
-        "",
-        true,
-      ),
-    );
+  if (!detail.unavailable && detail.displayName !== "???")
+    portrait.append(veilingArtwork(detail.colorArt, detail.displayName, "", true));
   const info = el("div", "detail-info");
   const badge = el(
     "span",
@@ -284,11 +278,10 @@ export function renderDetail(detail) {
 }
 
 export function renderFullDetail(detail) {
-  const grid = el("div", "full-detail-grid" + (detail.colorArt ? " has-artwork" : ""));
-  if (detail.colorArt)
-    grid.append(
-      image(detail.colorArt, `Artwork for ${detail.displayName}`, "", true),
-    );
+  const showArt = !detail.unavailable && detail.displayName !== "???";
+  const grid = el("div", "full-detail-grid" + (showArt ? " has-artwork" : ""));
+  if (showArt)
+    grid.append(veilingArtwork(detail.colorArt, detail.displayName, "", true));
   const content = el("div");
   const title = el("h2", "", detail.displayName);
   title.id = "full-detail-name";
