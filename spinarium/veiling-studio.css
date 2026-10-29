@@ -119,3 +119,10 @@
   .studio-editor-intro { font-size: .875rem; }
   .studio-visibility { padding: 16px; }
 }
+
+/* Deletion stays visually distinct from saving or publishing. */
+.studio-delete { border-color: #bc858b !important; color: #ffe0e2 !important; background: #2e1d24 !important; }
+.studio-delete:hover:enabled { border-color: #ffc2ca !important; background: #45232b !important; }
+.studio-delete:disabled { opacity: .7; }
+.studio-delete-hint { margin: 6px 0 18px; }
+.studio-delete-dialog .studio-preview-note strong { color: #ffdddd; }
