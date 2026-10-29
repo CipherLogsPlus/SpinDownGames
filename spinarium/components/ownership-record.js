@@ -1,4 +1,5 @@
 import { el } from "./views.js";
+import { veilingArtwork } from "./veiling-artwork.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const acquiredDate = value => new Intl.DateTimeFormat("en-US", {
@@ -39,12 +40,9 @@ export function renderOwnershipRecord({ status, detail, retry }) {
   }
   page.append(metadata);
   const content = el("section", "ownership-veiling");
-  if (veiling.artworkUrl) {
-    const artwork = el("img", "ownership-artwork");
-    artwork.src = veiling.artworkUrl;
-    artwork.alt = "Artwork for " + (veiling.name || "this Veiling");
-    artwork.addEventListener("error", () => artwork.remove(), { once: true });
-    content.append(artwork);
+  // Preserve hidden/redacted Veilings; artwork-less revealed Veilings get the universal silhouette.
+  if (!unavailable && veiling.contentStatus === "published") {
+    content.append(veilingArtwork(veiling.artworkUrl, veiling.name || "this Veiling", "ownership-artwork"));
   }
   const copy = el("div");
   copy.append(

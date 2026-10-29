@@ -1,17 +1,12 @@
 import { el } from "./views.js";
+import { veilingArtwork } from "./veiling-artwork.js";
 import { releaseLabel } from "../domain/showcase.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const byNumber = (a, b) => (a.number ?? Infinity) - (b.number ?? Infinity) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 
 function artwork(row, className) {
-  if (!row.artworkUrl) return null;
-  const image = el("img", className);
-  image.src = row.artworkUrl;
-  image.alt = "Artwork for " + row.name;
-  image.loading = "lazy";
-  image.addEventListener("error", () => image.remove(), { once: true });
-  return image;
+  return veilingArtwork(row.artworkUrl, row.name, className);
 }
 function numberLabel(row) {
   return row.number === null ? "Veiling" : "Veiling // " + String(row.number).padStart(3, "0");
