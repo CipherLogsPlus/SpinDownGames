@@ -121,8 +121,8 @@
   function updateEventDisplay() {
     const today = todayInOhio();
     const scheduled = records
-      .filter(({ start, end }) => /^\\d{4}-\\d{2}-\\d{2}$/.test(start) &&
-        /^\\d{4}-\\d{2}-\\d{2}$/.test(end) && start <= end && end >= today)
+      .filter(({ start, end }) => /^\d{4}-\d{2}-\d{2}$/.test(start) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(end) && start <= end && end >= today)
       .sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
 
     for (const record of records) {
@@ -155,7 +155,7 @@
       return;
     }
     const next = scheduled[0];
-    const name = next.article.querySelector(".event-main h3")?.textContent.replace(/\\s+/g, " ").trim() || "Upcoming event";
+    const name = next.article.querySelector(".event-main h3")?.textContent.replace(/\s+/g, " ").trim() || "Upcoming event";
     const venue = next.article.querySelector(".event-location strong")?.textContent.trim();
     title.textContent = `Next event · ${dateLabel(next.start, next.end)}`;
     subtitle.textContent = venue ? `${name} · ${venue}` : name;
