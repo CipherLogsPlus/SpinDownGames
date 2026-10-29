@@ -1,0 +1,32 @@
+name: Verify production asset hashes (no deployment)
+on:
+  push:
+    branches:
+      - ops/verify-production-static-assets-20261029
+jobs:
+  hashes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Calculate current production asset manifest
+        run: |
+          python3 - <<'PY'
+          import pathlib, hashlib, json
+          root=pathlib.Path(".")
+          roots=["index.html","privacy.html","terms.html","styles.css","legal.css","script.js","coin-viewer.js"]
+          artwork_ext={".webp",".png",".jpg",".jpeg",".svg",".ttf",".woff",".woff2",".glb"}
+          site_ext={".html",".css",".js"}
+          retired={"spinarium/auth/supabase-auth.js","spinarium/data/supabase-service.js","spinarium/data/demo-service.js","spinarium/config.js"}
+          files={}
+          for x in roots: files[x]=pathlib.Path(x).read_bytes()
+          for p in pathlib.Path("assets").rglob("*"):
+              if p.is_file() and not any(s.startswith(".") for s in p.parts) and (p.suffix in artwork_ext or (p.parent==pathlib.Path("assets/fonts") and p.suffix==".txt")): files[p.as_posix()]=p.read_bytes()
+          for p in pathlib.Path("spinarium").rglob("*"):
+              if p.is_file() and not any(s.startswith(".") for s in p.parts) and p.suffix in site_ext and p.as_posix() not in retired: files[p.as_posix()]=p.read_bytes()
+          config={'previewEnabled':False,'backend':'cloudflare','authProvider':'password','signupEnabled':True,'apiBase':'/api','supabaseUrl':'','supabasePublishableKey':''}
+          files["spinarium/config.js"]=("// Generated production public switches. Contains no credentials.\\nexport const spinariumConfig = Object.freeze("+json.dumps(config,indent=2)+");\\n").encode()
+          files["_headers"]=("/*\\n  X-Content-Type-Options: nosniff\\n  X-Frame-Options: DENY\\n  Referrer-Policy: strict-origin-when-cross-origin\\n/spinarium/config.js\\n  Cache-Control: no-store\\n").encode()
+          manifest={"/"+p:{"hash":hashlib.sha256(data).hexdigest()[:32],"size":len(data)} for p,data in sorted(files.items())}
+          print("ASSET_MANIFEST_JSON="+json.dumps(manifest,separators=(",",":")))
+          print("ASSET_TOTAL="+str(len(manifest)))
+          PY
