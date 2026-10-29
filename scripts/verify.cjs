@@ -200,8 +200,44 @@ const test = async (name, fn) => {
         "events",
       );
     });
+    await test("completed events enter archive and show the no-events state", async () => {
+      assert.equal(await page.locator("#upcoming-events .event-card").count(), 0);
+      assert.equal(await page.locator(".past-events").count(), 2);
+      assert.match(await page.locator("#next-event-status").innerText(), /No upcoming events announced/);
+      assert.match(await page.locator(".past-events").first().innerText(), /October 17–18, 2026/);
+    });
+    await test("event remains featured through its final Ohio day, then archives", async () => {
+      const fixture = await browser.newPage();
+      await fixture.addInitScript(() => {
+        const NativeDate = Date;
+        window.__eventTestTime = "2026-10-18T20:00:00Z";
+        window.Date = class extends NativeDate {
+          constructor(...args) {
+            super(...(args.length ? args : [window.__eventTestTime]));
+          }
+          static now() {
+            return new NativeDate(window.__eventTestTime).getTime();
+          }
+        };
+      });
+      try {
+        await fixture.goto(base);
+        assert.equal(await fixture.locator("#upcoming-events .event-card").count(), 1);
+        assert.match(await fixture.locator("#next-event-status").innerText(), /Next event/);
+        assert.equal(await fixture.locator(".past-events:not([hidden])").count(), 1);
+        await fixture.evaluate(() => {
+          window.__eventTestTime = "2026-10-19T04:01:00Z";
+          window.dispatchEvent(new Event("focus"));
+        });
+        assert.equal(await fixture.locator("#upcoming-events .event-card").count(), 0);
+        assert.equal(await fixture.locator(".past-events:not([hidden])").count(), 2);
+        assert.match(await fixture.locator("#next-event-status").innerText(), /No upcoming events announced/);
+      } finally {
+        await fixture.close();
+      }
+    });
     await test("past event archive expands and closes", async () => {
-      await page.locator(".past-events > summary").click();
+      await page.locator(".past-events").last().locator("summary").first().click();
       const details = page.locator(".event-archive");
       await details.locator("summary").click();
       assert(await details.evaluate((el) => el.open));
@@ -214,7 +250,7 @@ const test = async (name, fn) => {
       );
       await details.locator("summary").click();
       assert(!(await details.evaluate((el) => el.open)));
-      await page.locator(".past-events > summary").click();
+      await page.locator(".past-events").last().locator("summary").first().click();
     });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await test("D20 and D6 roll endpoints, history cap, and accessible result", async () => {
@@ -357,7 +393,7 @@ const test = async (name, fn) => {
         .getByRole("link", { name: "The meetups" })
         .click();
       assert.equal(new URL(fallback.url()).hash, "#events");
-      await fallback.locator(".past-events > summary").click();
+      await fallback.locator(".past-events").last().locator("summary").first().click();
       await fallback.locator(".event-archive summary").click();
       assert(
         await fallback.locator(".event-archive > div > p").first().isVisible(),
