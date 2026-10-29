@@ -371,7 +371,15 @@ async function publish(page, state, action, expected, expectedName) {
       await withFixtures(browser, state, [{ admin: true, hash: "admin" }, {}], async ({ page }, member) => {
         await waitStudio(page); await waitShowcase(member.page);
         assert.equal(await page.locator("#studio-editor-form").count(), 0);
-        await page.locator("#studio-create").click();
+        assert(await page.locator("#studio-start").isVisible());
+        const children = await page.locator(".studio-layout > *").evaluateAll(nodes => nodes.map(node => node.classList.contains("studio-editor") ? "editor" : "library"));
+        assert.deepEqual(children, ["editor", "library"]);
+        await page.locator("#studio-start").click();
+        assert(await page.locator(".studio-optional-details").isVisible());
+        assert.equal(await page.locator(".studio-optional-details").getAttribute("open"), null);
+        assert.equal(await page.locator("#studio-name").getAttribute("required"), "");
+        assert.match(await page.locator(".studio-editor").innerText(), /STEP 1 · CREATE/);
+        assert.match(await page.locator(".studio-visibility").innerText(), /Step 2 · Share with members/);
         await page.locator("#studio-name").fill("Name-only draft");
         assert(await page.locator('[data-studio-action="public"]').isDisabled());
         await saveDraft(page);
