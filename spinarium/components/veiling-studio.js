@@ -1,4 +1,5 @@
 import { el } from "./views.js";
+import { veilingArtwork } from "./veiling-artwork.js";
 import { validReleaseDate } from "../domain/showcase.js";
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -74,11 +75,7 @@ function feedback(id) {
   return node;
 }
 function artwork(url, name, className = "studio-artwork") {
-  const image = el("img", className);
-  image.src = url;
-  image.alt = "Artwork for " + name;
-  image.addEventListener("error", () => image.replaceWith(el("p", "studio-note", "Artwork preview unavailable.")), { once: true });
-  return image;
+  return veilingArtwork(url, name || "this Veiling", className);
 }
 function visibilityName(row) {
   return row.publication?.visibility === "public" ? "Public · members" : row.publication?.visibility === "upcoming" ? "Upcoming" : "Draft";
@@ -368,7 +365,7 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     const artHint = el("p", "studio-note", "PNG, JPEG or WebP · up to 8 MB. Artwork is saved to the draft first.");
     artHint.id = "studio-artwork-hint"; ui.file.setAttribute("aria-describedby", artHint.id);
     art.wrapper.append(artHint);
-    if (state.selected?.artworkUrl) art.wrapper.append(artwork(state.selected.artworkUrl, state.selected.name));
+    art.wrapper.append(artwork(state.selected?.artworkUrl || null, state.selected?.name || "this Veiling"));
     ui.clearFile = button("Clear selected artwork", "studio-clear-artwork", "studio-text-button");
     ui.clearFile.addEventListener("click", () => {
       ui.file.value = ""; updateControls(state);
@@ -519,7 +516,7 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
       ? "This Veiling will no longer appear in member views. Its saved draft remains in the Studio."
       : plan.input.useSavedDraft ? "Members will see this saved draft after you confirm." : "This moves the existing member version. Your draft edits are not included."));
     const card = el("div", "studio-preview-card");
-    if (plan.content.artworkUrl) card.append(artwork(plan.content.artworkUrl, plan.content.name));
+    card.append(artwork(plan.content.artworkUrl, plan.content.name));
     const content = el("div");
     content.append(el("h4", "", plan.content.name));
     if (plan.content.number != null) content.append(el("p", "studio-note", "Veiling " + String(plan.content.number).padStart(3, "0")));
