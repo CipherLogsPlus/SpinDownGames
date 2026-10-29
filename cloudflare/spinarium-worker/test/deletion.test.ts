@@ -88,6 +88,23 @@ test('published Veilings are protected until explicitly hidden, then can be remo
     .bind(draft.id).first('n'), 2);
 });
 
+test('a previously active legacy Veiling can be deleted only when no member publication exists', async t => {
+  const h = await harness(t);
+  const admin = await seedSession(h.db, { admin: true });
+  const row = await create(h, admin.headers);
+  await h.db.prepare("UPDATE catalog_veilings SET status='active' WHERE id=?").bind(row.id).run();
+  const response = await h.fetch(url(row.id), del(row.id, admin.headers, row.revision));
+  assert.equal(response.status, 200);
+  const v = await h.db.prepare('SELECT status, deleted_at FROM catalog_veilings WHERE id=?')
+    .bind(row.id).first<{ status:string, deleted_at:number|null }>();
+  assert.equal(v?.status, 'retired');
+  assert(v?.deleted_at);
+  const dashboard = await h.fetch('/api/dashboard', { headers: admin.headers });
+  assert.equal(dashboard.status, 200);
+  const body = await dashboard.json() as { veilings: Array<{id:string}> };
+  assert(!body.veilings.some(v => v.id === row.id));
+});
+
 test('deleted catalog records keep real collector ownership rather than revoking it', async t => {
   const h = await harness(t);
   const admin = await seedSession(h.db, { admin: true });
