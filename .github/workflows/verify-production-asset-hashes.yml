@@ -55,3 +55,15 @@ jobs:
           grep -q 'previewEnabled' /tmp/config.js
           grep -q 'signupEnabled' /tmp/config.js
           echo "PASS Spinarium account config available"
+
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /tmp/studio.html "$BASE/spinarium/"
+          grep -q 'Create a Veiling in two steps' /tmp/studio.html
+          echo "PASS Veiling Studio HTML has redesigned introduction"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /tmp/studio-js "$BASE/spinarium/components/veiling-studio.js?verify=20261029"
+          grep -q 'Bring your next Veiling to life' /tmp/studio-js
+          grep -q 'studio-essentials' /tmp/studio-js
+          echo "PASS Veiling Studio JavaScript is redesigned"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /tmp/studio-css "$BASE/spinarium/veiling-studio.css?verify=20261029"
+          grep -q 'Focused create-first workspace' /tmp/studio-css
+          echo "PASS Veiling Studio styles are redesigned"
+
