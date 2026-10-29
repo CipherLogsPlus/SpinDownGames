@@ -30,3 +30,28 @@ jobs:
           print("ASSET_MANIFEST_JSON="+json.dumps(manifest,separators=(",",":")))
           print("ASSET_TOTAL="+str(len(manifest)))
           PY
+
+      - name: Verify live Cloudflare routing, main website and Spinarium
+        run: |
+          set -eu
+          BASE=https://spindowngames.com
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --output /tmp/website.html "$BASE/"
+          grep -q 'No upcoming events announced' /tmp/website.html
+          grep -q 'data-event-end="2026-10-18"' /tmp/website.html
+          echo "PASS homepage uses updated events markup"
+          curl --fail --silent --show-error --output /tmp/site-script.js "$BASE/script.js?v=event-directions-1"
+          grep -q 'updateEventDisplay' /tmp/site-script.js
+          echo "PASS website JavaScript uses automatic archiving"
+          curl --fail --silent --show-error --output /tmp/site-styles.css "$BASE/styles.css?v=trademark-1"
+          grep -q 'upcoming-events' /tmp/site-styles.css
+          echo "PASS website stylesheet updated"
+          curl --fail --silent --show-error --output /tmp/health.json "$BASE/api/health"
+          python3 -c 'import json; x=json.load(open("/tmp/health.json")); assert x["service"]=="spinarium" and x["accountsEnabled"] is True and x["claimsEnabled"] is False'
+          echo "PASS Spinarium API enabled"
+          curl --fail --silent --show-error --output /tmp/spinarium.html "$BASE/spinarium/"
+          grep -q 'Spinarium' /tmp/spinarium.html
+          echo "PASS Spinarium frontend available"
+          curl --fail --silent --show-error --output /tmp/config.js "$BASE/spinarium/config.js"
+          grep -q 'previewEnabled' /tmp/config.js
+          grep -q 'signupEnabled' /tmp/config.js
+          echo "PASS Spinarium account config available"
