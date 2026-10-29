@@ -139,6 +139,12 @@ async function fixture(browser, state, { admin = false, signedIn = true, hash = 
                 return await respond({ code: "CATALOG_CHANGED", message: privateMessage }, 409);
               }
               const input = request.postDataJSON();
+              if (!match[2] && method === "DELETE") {
+                assert.deepEqual(input, {});
+                if (row.publication) return await respond({ code: "UNPUBLISH_FIRST" }, 409);
+                state.rows.delete(row.id);
+                return await respond({ id: row.id, deleted: true });
+              }
               if (!match[2] && method === "PATCH") {
                 Object.assign(row, { name: input.name, description: input.description, character_number: input.number,
                   status: input.status, rarity: input.rarity, edition: input.edition, revision: row.revision + 1 });
@@ -409,6 +415,37 @@ async function publish(page, state, action, expected, expectedName) {
         await member.page.locator(memberCard(row.id)).click();
         await waitMemberDetail(member.page, "Privately revised name");
         assert.equal(await member.page.locator(".showcase-description").textContent(), "Private saved draft lore");
+      });
+    });
+    await test("delete drafts confirms explicitly; live Veilings require unpublish first", async () => {
+      const state = server();
+      await withFixtures(browser, state, [{ admin: true, hash: "admin" }], async ({ page }) => {
+        await waitStudio(page);
+        await page.locator(studioItem(uuid(5))).click();
+        assert(await page.locator("#studio-delete").isEnabled());
+        await page.locator("#studio-delete").click();
+        assert(await page.locator("#studio-delete-dialog").isVisible());
+        assert.match(await page.locator("#studio-delete-dialog").innerText(), /Unapproved Copper Wisp/);
+        await page.locator("#studio-delete-cancel").click();
+        assert(state.rows.has(uuid(5)), "cancel leaves the draft intact");
+        await page.locator("#studio-delete").click();
+        await page.locator("#studio-delete-confirm").click();
+        await page.waitForFunction(() => document.querySelector('#studio-delete-dialog') === null);
+        assert(!state.rows.has(uuid(5)));
+        assert.equal(await page.locator(studioItem(uuid(5))).count(), 0);
+        const deleted = state.calls.filter(call => call.method === "DELETE");
+        assert.equal(deleted.length, 1);
+        assert.equal(deleted[0].ifMatch, '"1"');
+        await page.locator(studioItem(uuid(1))).click();
+        assert(await page.locator("#studio-delete").isDisabled());
+        assert.match(await page.locator("#studio-delete-hint").innerText(), /Hide from members/);
+        assert(!state.calls.some(call => call.method === "DELETE" && call.path.endsWith(uuid(1))));
+        await publish(page, state, "private", { visibility: "private", releaseDate: null, useSavedDraft: false }, publicName);
+        assert(await page.locator("#studio-delete").isEnabled());
+        await page.locator("#studio-delete").click();
+        await page.locator("#studio-delete-confirm").click();
+        await page.waitForFunction(() => document.querySelector('#studio-delete-dialog') === null);
+        assert(!state.rows.has(uuid(1)));
       });
     });
     await test("visibility and date changes keep the approved version until explicit draft publication", async () => {

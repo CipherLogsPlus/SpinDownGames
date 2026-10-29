@@ -88,6 +88,7 @@ function errorText(error) {
   if (error?.code === "NUMBER_IN_USE") return "That character number is already in use. Choose another number or leave it blank.";
   if (["ACCESS_DENIED", "AUTH_REQUIRED"].includes(error?.code)) return "Studio access is no longer available. Sign in again or return to your collection.";
   if (error?.code === "PUBLICATION_REQUIRED") return "The member version changed. Reload this Veiling before continuing.";
+  if (error?.code === "UNPUBLISH_FIRST") return "Unpublish this Veiling before deleting it.";
   return "The request could not be completed. Try again; no further changes have been confirmed.";
 }
 
@@ -219,6 +220,10 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     ui.discard.hidden = !unsaved && !state.conflict;
     ui.discard.disabled = state.busy || state.loading;
     ui.discard.textContent = state.conflict ? "Discard edits and reload" : "Discard changes";
+    ui.delete.hidden = !state.selected;
+    ui.delete.disabled = state.busy || state.loading || state.conflict || unsaved || Boolean(state.selected?.publication);
+    ui.deleteHint.hidden = !state.selected || !state.selected.publication;
+    ui.deleteHint.textContent = "This Veiling is live. Choose Hide from members below before deleting it.";
     ui.clearFile.hidden = !ui.file.files?.length;
     ui.draftState.textContent = unsaved ? "Unsaved changes" : state.selected ? "Saved draft" : "Not saved yet";
     const blocked = state.busy || state.loading || state.conflict || unsaved || !state.selected;
@@ -381,9 +386,14 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
       if (state.conflict) void load(state, state.selected?.id);
       else select(state, state.selected, true);
     });
-    actions.append(ui.save, ui.discard);
+    ui.delete = button("Delete Veiling", "studio-delete", "outlined-button studio-delete");
+    ui.delete.addEventListener("click", () => confirmDelete(state));
+    actions.append(ui.save, ui.discard, ui.delete);
+    ui.deleteHint = el("p", "studio-note studio-delete-hint");
+    ui.deleteHint.id = "studio-delete-hint";
+    ui.delete.setAttribute("aria-describedby", ui.deleteHint.id);
     ui.editorFeedback = feedback("studio-editor-feedback");
-    ui.form.append(ui.fieldset, actions, ui.editorFeedback);
+    ui.form.append(ui.fieldset, actions, ui.deleteHint, ui.editorFeedback);
     ui.form.addEventListener("input", () => updateControls(state));
     ui.form.addEventListener("change", () => updateControls(state));
     ui.form.addEventListener("submit", event => { event.preventDefault(); void save(state); });
@@ -391,6 +401,63 @@ export function createVeilingStudio({ root, service, getSession, onChanged = () 
     ui.editor.append(ui.form, ui.visibilityHost);
     renderVisibility(state);
     updateControls(state);
+  }
+
+  function confirmDelete(state) {
+    if (!active(state) || !state.selected || state.busy || state.loading || state.conflict || dirty(state))
+      return;
+    if (state.selected.publication) {
+      announce(state, "Unpublish this Veiling before deleting it.", true);
+      return;
+    }
+    const record = { id: state.selected.id, name: state.selected.name, revision: state.selected.revision };
+    const dialog = el("dialog", "modal studio-publish-dialog studio-delete-dialog");
+    dialog.id = "studio-delete-dialog";
+    dialog.setAttribute("aria-labelledby", "studio-delete-title");
+    const heading = el("h3", "", "Delete this Veiling?"); heading.id = "studio-delete-title";
+    const body = el("p", "studio-preview-note");
+    body.append("Are you sure you want to delete ", el("strong", "", record.name), "? It will disappear from the active Studio. Existing collection records and its change history will be preserved.");
+    const status = feedback("studio-delete-feedback");
+    const actions = el("div", "studio-preview-actions");
+    const cancel = button("Cancel", "studio-delete-cancel");
+    const accept = button("Yes, delete Veiling", "studio-delete-confirm", "outlined-button studio-delete");
+    const close = () => { if (dialog.open) dialog.close(); dialog.remove(); };
+    cancel.addEventListener("click", close);
+    dialog.addEventListener("close", () => { dialog.remove(); if (active(state)) state.ui.delete?.focus({ preventScroll: true }); });
+    accept.addEventListener("click", async () => {
+      if (!active(state) || state.busy || state.selected?.id !== record.id ||
+          state.selected.revision !== record.revision || dirty(state)) return;
+      state.busy = true; updateControls(state);
+      cancel.disabled = accept.disabled = true;
+      status.textContent = "Deleting Veiling…";
+      try {
+        await service.deleteVeiling(record);
+        if (!active(state)) return;
+        state.rows = state.rows.filter(row => row.id !== record.id);
+        close();
+        select(state, null, true);
+        announce(state, "Veiling deleted from the Studio. Its history was preserved.");
+        notify(null);
+      } catch (error) {
+        if (!active(state)) return;
+        status.textContent = errorText(error);
+        status.classList.add("is-error");
+        if (["STALE_REVISION", "REVISION_REQUIRED", "UNPUBLISH_FIRST"].includes(error?.code))
+          state.conflict = true;
+      } finally {
+        if (active(state)) {
+          state.busy = false;
+          cancel.disabled = accept.disabled = false;
+          renderList(state);
+          updateControls(state);
+        }
+      }
+    });
+    actions.append(cancel, accept);
+    dialog.append(heading, body, status, actions);
+    root.append(dialog);
+    dialog.showModal();
+    cancel.focus();
   }
   async function save(state) {
     if (!active(state) || state.busy || state.loading || state.conflict || !state.ui.form.reportValidity()) return false;

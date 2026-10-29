@@ -16,7 +16,7 @@ export interface CatalogRow {
   status: 'draft' | 'active' | 'retired'; rarity: string | null; edition: string | null; artwork_id: string | null;
   revision: number; created_by: string; updated_by: string; created_at: number; updated_at: number;
   publication_json?: string | null;
-  legacy_content_visible: number;
+  legacy_content_visible: number; deleted_at: number | null; deleted_by: string | null;
 }
 function snapshotJson(alias: string): string {
   return `json_object('veiling_id',${alias}.veiling_id,'name',${alias}.name,'description',${alias}.description,
@@ -28,7 +28,7 @@ export const PUBLICATION_COLUMN = `CASE WHEN p.veiling_id IS NOT NULL THEN ${sna
 // Publication history is immutable and indexed. It distinguishes a deliberately
 // hidden snapshot (including historical hides) from a never-managed legacy row.
 // Hiding must never make an editable draft eligible for the legacy fallback.
-export const LEGACY_CATALOG_VISIBLE = `(v.status != 'draft' AND NOT EXISTS (
+export const LEGACY_CATALOG_VISIBLE = `(v.deleted_at IS NULL AND v.status != 'draft' AND NOT EXISTS (
   SELECT 1 FROM publication_audit history WHERE history.veiling_id=v.id
 ))`;
 export const CATALOG_WITH_PUBLICATION = `SELECT v.*, ${PUBLICATION_COLUMN},
@@ -78,6 +78,7 @@ export async function publishPublication(request: Request, env: Env, session: Au
   const db = env.DB.withSession('first-primary');
   const current = await db.prepare(`${CATALOG_WITH_PUBLICATION} WHERE v.id=?`).bind(id).first<CatalogRow>();
   if (!current) throw new HttpError(404, 'NOT_FOUND', 'The Veiling was not found.');
+  if (current.deleted_at !== null) throw new HttpError(404, 'NOT_FOUND', 'The Veiling was not found.');
   if (current.revision !== expected) conflict();
   if (!useDraft && !publicationOf(current))
     throw new HttpError(409, 'PUBLICATION_REQUIRED', 'Approve the saved draft before changing its member visibility.');
