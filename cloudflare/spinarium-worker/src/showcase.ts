@@ -28,7 +28,7 @@ export const PUBLICATION_COLUMN = `CASE WHEN p.veiling_id IS NOT NULL THEN ${sna
 // Publication history is immutable and indexed. It distinguishes a deliberately
 // hidden snapshot (including historical hides) from a never-managed legacy row.
 // Hiding must never make an editable draft eligible for the legacy fallback.
-export const LEGACY_CATALOG_VISIBLE = `(v.status != 'draft' AND NOT EXISTS (
+export const LEGACY_CATALOG_VISIBLE = `(v.deleted_at IS NULL AND v.status != 'draft' AND NOT EXISTS (
   SELECT 1 FROM publication_audit history WHERE history.veiling_id=v.id
 ))`;
 export const CATALOG_WITH_PUBLICATION = `SELECT v.*, ${PUBLICATION_COLUMN},
